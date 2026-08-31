@@ -16,16 +16,13 @@ IF %ERRORLEVEL% EQU 0 (
   EXIT /B %ERRORLEVEL%
 )
 
-IF EXIST "%WRAPPER_JAR%" (
-  java -jar "%WRAPPER_JAR%" %*
-  EXIT /B %ERRORLEVEL%
+IF NOT EXIST "%WRAPPER_JAR%" (
+  echo Downloading Maven Wrapper...
+  powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.3.2/maven-wrapper-3.3.2.jar', '%WRAPPER_JAR%')"
 )
 
-echo Downloading Maven Wrapper...
-powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.3.2/maven-wrapper-3.3.2.jar', '%WRAPPER_JAR%')"
-
 IF EXIST "%WRAPPER_JAR%" (
-  java -jar "%WRAPPER_JAR%" %*
+  java -Dmaven.multiModuleProjectDirectory="%DIRNAME%" -cp "%WRAPPER_JAR%" org.apache.maven.wrapper.MavenWrapperMain %*
 ) ELSE (
   echo Error: Could not download maven-wrapper.jar. Please install Maven or check internet connection.
   EXIT /B 1

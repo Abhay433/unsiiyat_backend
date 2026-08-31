@@ -1,6 +1,6 @@
 #!/bin/sh
 # ----------------------------------------------------------------------------
-# Apache Maven Wrapper Startup Batch script, version 3.3.2
+# Apache Maven Wrapper Startup Batch script
 # ----------------------------------------------------------------------------
 
 # Set environment
@@ -22,7 +22,7 @@ done
 PRGDIR=`dirname "$PRG"`
 BASE_DIR=`cd "$PRGDIR" >/dev/null; pwd`
 
-# Locate wrapper jar or maven home
+# Locate wrapper jar
 WRAPPER_JAR="$BASE_DIR/.mvn/wrapper/maven-wrapper.jar"
 WRAPPER_PROP="$BASE_DIR/.mvn/wrapper/maven-wrapper.properties"
 
@@ -31,25 +31,21 @@ if command -v mvn >/dev/null 2>&1; then
   exec mvn "$@"
 fi
 
-# If wrapper jar exists, run it
-if [ -f "$WRAPPER_JAR" ]; then
-  exec java -jar "$WRAPPER_JAR" "$@"
-fi
-
-# Otherwise, attempt to download wrapper or maven if curl/wget is available
-echo "Downloading Maven Wrapper..."
-JAR_URL="https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.3.2/maven-wrapper-3.3.2.jar"
-mkdir -p "$BASE_DIR/.mvn/wrapper"
-
-if command -v curl >/dev/null 2>&1; then
-  curl -fsSL -o "$WRAPPER_JAR" "$JAR_URL"
-elif command -v wget >/dev/null 2>&1; then
-  wget -q -O "$WRAPPER_JAR" "$JAR_URL"
+# Download wrapper jar if missing
+if [ ! -f "$WRAPPER_JAR" ]; then
+  echo "Downloading Maven Wrapper..."
+  JAR_URL="https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.3.2/maven-wrapper-3.3.2.jar"
+  mkdir -p "$BASE_DIR/.mvn/wrapper"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$WRAPPER_JAR" "$JAR_URL"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$WRAPPER_JAR" "$JAR_URL"
+  fi
 fi
 
 if [ -f "$WRAPPER_JAR" ]; then
-  exec java -jar "$WRAPPER_JAR" "$@"
+  exec java -Dmaven.multiModuleProjectDirectory="$BASE_DIR" -cp "$WRAPPER_JAR" org.apache.maven.wrapper.MavenWrapperMain "$@"
 else
-  echo "Error: Could not find or download maven-wrapper.jar. Please install Maven or run with network access." >&2
+  echo "Error: Could not find maven-wrapper.jar. Please install Maven or check internet connection." >&2
   exit 1
 fi
