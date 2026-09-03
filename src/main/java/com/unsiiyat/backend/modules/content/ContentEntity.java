@@ -49,6 +49,12 @@ public class ContentEntity {
     @JoinTable(name = "content_themes", joinColumns = @JoinColumn(name = "content_id", referencedColumnName = "id"), inverseJoinColumns = @JoinColumn(name = "theme_id", referencedColumnName = "id"))
     private Set<ThemeEntity> themes = new HashSet<>();
 
+    @PrePersist
+    public void prePersist() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public ContentEntity() {
     }
 
