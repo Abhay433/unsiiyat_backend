@@ -1,4 +1,4 @@
-package com.unsiiyat.backend.common.exception;
+package com.unsiiyat.backend.common.exceptions;
 
 public class BadRequestException extends RuntimeException {
 
