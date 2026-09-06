@@ -23,7 +23,6 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
-import java.util.UUID;
 
 @Service
 public class CloudflareR2Service {
@@ -49,20 +48,40 @@ public class CloudflareR2Service {
 
     @PostConstruct
     public void init() {
-        this.s3Client = S3Client.builder()
-                .endpointOverride(URI.create(endpoint))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKeyId, secretAccessKey)))
-                .region(Region.of("auto"))
-                .serviceConfiguration(S3Configuration.builder()
-                        .pathStyleAccessEnabled(true)
-                        .build())
-                .build();
+        if (endpoint == null || endpoint.isBlank() || endpoint.contains("dummy")
+                || accessKeyId == null || accessKeyId.isBlank()
+                || secretAccessKey == null || secretAccessKey.isBlank()) {
+            LOGGER.warn(
+                    "Cloudflare R2 properties are not configured. S3Client will be uninitialized until valid credentials are provided.");
+            return;
+        }
 
-        LOGGER.debug("Cloudflare R2 S3Client initialized successfully");
+        try {
+            this.s3Client = S3Client.builder()
+                    .endpointOverride(URI.create(endpoint))
+                    .credentialsProvider(StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create(accessKeyId, secretAccessKey)))
+                    .region(Region.of("auto"))
+                    .serviceConfiguration(S3Configuration.builder()
+                            .pathStyleAccessEnabled(true)
+                            .build())
+                    .build();
+
+            LOGGER.info("Cloudflare R2 S3Client initialized successfully");
+        } catch (Exception e) {
+            LOGGER.error("Failed to initialize Cloudflare R2 S3Client: {}", e.getMessage(), e);
+        }
+    }
+
+    private void ensureS3Client() {
+        if (this.s3Client == null) {
+            throw new IllegalStateException(
+                    "Cloudflare R2 storage is not configured. Please configure cloudflare.r2.* properties in application.properties.");
+        }
     }
 
     public String uploadFile(MultipartFile file, String uniqueKey) throws Exception {
+        ensureS3Client();
         LOGGER.debug("Uploading file to Cloudflare R2: {}", file.getOriginalFilename());
 
         validateFileSize(file);
@@ -96,15 +115,19 @@ public class CloudflareR2Service {
             throw new RuntimeException("R2 upload failed", e);
         }
 
-        String imageUrl = publicUrl.trim() + "/" + uniqueKey;
+        String base = (publicUrl != null && !publicUrl.isBlank()) ? publicUrl.trim() : "";
+        String imageUrl = base.isEmpty() ? uniqueKey : base + "/" + uniqueKey;
         LOGGER.debug("FINAL_URL=[{}]", imageUrl);
 
         return imageUrl;
     }
 
-    // Fetch an object's bytes from R2 using the server's own credentials, so downloads work
-    // without the bucket needing to be public. Returned to the browser as an attachment.
+    // Fetch an object's bytes from R2 using the server's own credentials, so
+    // downloads work
+    // without the bucket needing to be public. Returned to the browser as an
+    // attachment.
     public DownloadedFile downloadFile(String uniqueKey) {
+        ensureS3Client();
         LOGGER.debug("Downloading file from Cloudflare R2: {}", uniqueKey);
         try {
             ResponseBytes<GetObjectResponse> object = s3Client.getObjectAsBytes(
@@ -120,6 +143,7 @@ public class CloudflareR2Service {
     }
 
     public void deleteFile(String uniqueKey) {
+        ensureS3Client();
         LOGGER.debug("Deleting file from Cloudflare R2: {}", uniqueKey);
         try {
             s3Client.deleteObject(software.amazon.awssdk.services.s3.model.DeleteObjectRequest.builder()

@@ -30,6 +30,9 @@ public class UserEntity {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
+    @Column(name = "profile_picture_url")
+    private String profilePictureUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -95,6 +98,14 @@ public class UserEntity {
 
     public void setIsActive(Boolean isActive) {
         this.isActive = isActive;
+    }
+
+    public String getProfilePictureUrl() {
+        return profilePictureUrl;
+    }
+
+    public void setProfilePictureUrl(String profilePictureUrl) {
+        this.profilePictureUrl = profilePictureUrl;
     }
 
     public LocalDateTime getCreatedAt() {
