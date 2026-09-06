@@ -66,6 +66,13 @@ public class GenreService {
         genreRepository.save(entity);
     }
 
+    @Transactional
+    public void deleteGenre(GenreDto request) {
+        GenreEntity entity = genreRepository.findById(request.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Genre not found with id: " + request.getId()));
+        genreRepository.delete(entity);
+    }
+
     public GenreDto mapToGenreDto(GenreEntity entity) {
         GenreDto dto = new GenreDto();
         dto.setId(entity.getId());

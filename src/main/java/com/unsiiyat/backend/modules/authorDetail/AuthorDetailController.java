@@ -31,10 +31,10 @@ public class AuthorDetailController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/addOrUpdate")
-    public ResponseEntity<ApiResponse<Void>> addOrUpdateAuthorDetail(@RequestBody AuthorDetailDto request) {
+    public ResponseEntity<ApiResponse<AuthorDetailDto>> addOrUpdateAuthorDetail(@RequestBody AuthorDetailDto request) {
         LOGGER.debug("addOrUpdateAuthorDetail endpoint called");
-        authorDetailService.addOrUpdateAuthorDetail(request);
-        return ResponseEntity.ok(ApiResponse.success("Author detail saved successfully", null));
+        AuthorDetailDto response = authorDetailService.addOrUpdateAuthorDetail(request);
+        return ResponseEntity.ok(ApiResponse.success("Author detail saved successfully", response));
     }
 
 }

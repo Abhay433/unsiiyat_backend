@@ -1,6 +1,12 @@
 package com.unsiiyat.backend.modules.content;
 
+import com.unsiiyat.backend.modules.author.AuthorDto;
+import com.unsiiyat.backend.modules.contextText.ContentTextDto;
+import com.unsiiyat.backend.modules.genre.GenreDto;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 public class ContentDto {
@@ -10,6 +16,10 @@ public class ContentDto {
     private Long authorId;
     private String title;
     private Set<Long> themeIds;
+    private AuthorDto author;
+    private GenreDto genre;
+    private List<ContentTextDto> contentTexts = new ArrayList<>();
+    private ContentTextDto primaryText;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -62,6 +72,38 @@ public class ContentDto {
 
     public void setThemeIds(Set<Long> themeIds) {
         this.themeIds = themeIds;
+    }
+
+    public AuthorDto getAuthor() {
+        return author;
+    }
+
+    public void setAuthor(AuthorDto author) {
+        this.author = author;
+    }
+
+    public GenreDto getGenre() {
+        return genre;
+    }
+
+    public void setGenre(GenreDto genre) {
+        this.genre = genre;
+    }
+
+    public List<ContentTextDto> getContentTexts() {
+        return contentTexts;
+    }
+
+    public void setContentTexts(List<ContentTextDto> contentTexts) {
+        this.contentTexts = contentTexts;
+    }
+
+    public ContentTextDto getPrimaryText() {
+        return primaryText;
+    }
+
+    public void setPrimaryText(ContentTextDto primaryText) {
+        this.primaryText = primaryText;
     }
 
     public LocalDateTime getCreatedAt() {

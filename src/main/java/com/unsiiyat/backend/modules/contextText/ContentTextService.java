@@ -14,10 +14,10 @@ import org.springframework.stereotype.Service;
 import com.unsiiyat.backend.common.exceptions.ResourceNotFoundException;
 import com.unsiiyat.backend.common.response.PagedResponse;
 import com.unsiiyat.backend.modules.content.ContentEntity;
+import com.unsiiyat.backend.modules.content.ContentRepository;
 import com.unsiiyat.backend.modules.script.ScriptEntity;
+import com.unsiiyat.backend.modules.script.ScriptRepository;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 
 @Service
@@ -26,8 +26,11 @@ public class ContentTextService {
     @Autowired
     private ContentTextRepository contentTextRepository;
 
-    @PersistenceContext
-    private EntityManager entityManager;
+    @Autowired
+    private ContentRepository contentRepository;
+
+    @Autowired
+    private ScriptRepository scriptRepository;
 
     @Transactional
     public PagedResponse<ContentTextDto> filterContentText(ContentTextFilterRequest request) {
@@ -46,43 +49,55 @@ public class ContentTextService {
     }
 
     @Transactional
-    public void addOrUpdateContentText(ContentTextDto request) {
-
+    public ContentTextDto addOrUpdateContentText(ContentTextDto request) {
+        ContentTextEntity entity;
         if (request.getId() != null) {
-            updateContentText(request);
+            entity = contentTextRepository.findById(request.getId())
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("ContentText not found with id: " + request.getId()));
+        } else if (request.getContentId() != null && request.getScriptId() != null) {
+            entity = contentTextRepository.findByContentIdAndScriptId(request.getContentId(), request.getScriptId())
+                    .orElseGet(ContentTextEntity::new);
         } else {
-            createContentText(request);
+            entity = new ContentTextEntity();
         }
 
-    }
-
-    @Transactional
-    public void createContentText(ContentTextDto request) {
-        ContentTextEntity entity = new ContentTextEntity();
         if (request.getContentId() != null) {
-            entity.setContent(entityManager.getReference(ContentEntity.class, request.getContentId()));
+            ContentEntity content = contentRepository.findById(request.getContentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Content not found with id: "
+                            + request.getContentId() + ". Please create the content record first."));
+            entity.setContent(content);
         }
         if (request.getScriptId() != null) {
-            entity.setScript(entityManager.getReference(ScriptEntity.class, request.getScriptId()));
+            ScriptEntity script = scriptRepository.findById(request.getScriptId())
+                    .orElseGet(() -> {
+                        // Fallback: check or create standard script by code if ID 1, 2, or 3 doesn't
+                        // exist yet
+                        String defaultCode = request.getScriptId() == 1L ? "ur"
+                                : (request.getScriptId() == 2L ? "hi" : (request.getScriptId() == 3L ? "en" : null));
+                        String defaultName = request.getScriptId() == 1L ? "Urdu"
+                                : (request.getScriptId() == 2L ? "Hindi"
+                                        : (request.getScriptId() == 3L ? "English" : null));
+                        if (defaultCode != null) {
+                            return scriptRepository.findByCode(defaultCode)
+                                    .orElseGet(() -> scriptRepository.save(new ScriptEntity(defaultCode, defaultName,
+                                            java.time.LocalDateTime.now(), java.time.LocalDateTime.now())));
+                        }
+                        throw new ResourceNotFoundException("Script not found with id: " + request.getScriptId());
+                    });
+            entity.setScript(script);
         }
         entity.setTitle(request.getTitle());
         entity.setBody(request.getBody());
-        contentTextRepository.save(entity);
+
+        ContentTextEntity saved = contentTextRepository.save(entity);
+        return mapToContentTextDto(saved);
     }
 
-    @Transactional
-    public void updateContentText(ContentTextDto request) {
+    public void deleteContentText(ContentTextDto request) {
         ContentTextEntity entity = contentTextRepository.findById(request.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("ContentText not found with id: " + request.getId()));
-        if (request.getContentId() != null) {
-            entity.setContent(entityManager.getReference(ContentEntity.class, request.getContentId()));
-        }
-        if (request.getScriptId() != null) {
-            entity.setScript(entityManager.getReference(ScriptEntity.class, request.getScriptId()));
-        }
-        entity.setTitle(request.getTitle());
-        entity.setBody(request.getBody());
-        contentTextRepository.save(entity);
+        contentTextRepository.delete(entity);
     }
 
     public ContentTextDto mapToContentTextDto(ContentTextEntity entity) {

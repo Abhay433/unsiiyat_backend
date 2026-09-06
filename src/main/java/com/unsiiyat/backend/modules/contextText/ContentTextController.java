@@ -23,7 +23,8 @@ public class ContentTextController {
     private static final Logger LOGGER = LoggerFactory.getLogger(ContentTextController.class);
 
     @PostMapping("/list")
-    public ResponseEntity<PagedResponse<ContentTextDto>> filterContentText(@RequestBody ContentTextFilterRequest request) {
+    public ResponseEntity<PagedResponse<ContentTextDto>> filterContentText(
+            @RequestBody ContentTextFilterRequest request) {
         LOGGER.debug("filterContentText endpoint called");
         PagedResponse<ContentTextDto> response = contentTextService.filterContentText(request);
         return ResponseEntity.ok(response);
@@ -31,10 +32,17 @@ public class ContentTextController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/addOrUpdate")
-    public ResponseEntity<ApiResponse<Void>> addOrUpdateContentText(@RequestBody ContentTextDto request) {
+    public ResponseEntity<ApiResponse<ContentTextDto>> addOrUpdateContentText(@RequestBody ContentTextDto request) {
         LOGGER.debug("addOrUpdateContentText endpoint called");
-        contentTextService.addOrUpdateContentText(request);
-        return ResponseEntity.ok(ApiResponse.success("Content text saved successfully", null));
+        ContentTextDto response = contentTextService.addOrUpdateContentText(request);
+        return ResponseEntity.ok(ApiResponse.success("Content text saved successfully", response));
+    }
+
+    @PostMapping("/delete")
+    public ResponseEntity<ApiResponse<String>> deleteContentText(@RequestBody ContentTextDto request) {
+        LOGGER.debug("deleteContentText endpoint called");
+        contentTextService.deleteContentText(request);
+        return ResponseEntity.ok(ApiResponse.success("Content text deleted successfully", null));
     }
 
 }

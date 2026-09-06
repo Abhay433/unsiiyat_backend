@@ -14,10 +14,10 @@ import org.springframework.stereotype.Service;
 import com.unsiiyat.backend.common.exceptions.ResourceNotFoundException;
 import com.unsiiyat.backend.common.response.PagedResponse;
 import com.unsiiyat.backend.modules.author.AuthorEntity;
+import com.unsiiyat.backend.modules.author.AuthorRepository;
 import com.unsiiyat.backend.modules.script.ScriptEntity;
+import com.unsiiyat.backend.modules.script.ScriptRepository;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 
 @Service
@@ -26,8 +26,11 @@ public class AuthorDetailService {
     @Autowired
     private AuthorDetailRepository authorDetailRepository;
 
-    @PersistenceContext
-    private EntityManager entityManager;
+    @Autowired
+    private AuthorRepository authorRepository;
+
+    @Autowired
+    private ScriptRepository scriptRepository;
 
     @Transactional
     public PagedResponse<AuthorDetailDto> filterAuthorDetail(AuthorDetailFilterRequest request) {
@@ -46,43 +49,33 @@ public class AuthorDetailService {
     }
 
     @Transactional
-    public void addOrUpdateAuthorDetail(AuthorDetailDto request) {
-
+    public AuthorDetailDto addOrUpdateAuthorDetail(AuthorDetailDto request) {
+        AuthorDetailEntity entity;
         if (request.getId() != null) {
-            updateAuthorDetail(request);
+            entity = authorDetailRepository.findById(request.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("AuthorDetail not found with id: " + request.getId()));
+        } else if (request.getAuthorId() != null && request.getScriptId() != null) {
+            entity = authorDetailRepository.findByAuthorIdAndScriptId(request.getAuthorId(), request.getScriptId())
+                    .orElseGet(AuthorDetailEntity::new);
         } else {
-            createAuthorDetail(request);
+            entity = new AuthorDetailEntity();
         }
 
-    }
-
-    @Transactional
-    public void createAuthorDetail(AuthorDetailDto request) {
-        AuthorDetailEntity entity = new AuthorDetailEntity();
         if (request.getAuthorId() != null) {
-            entity.setAuthor(entityManager.getReference(AuthorEntity.class, request.getAuthorId()));
+            AuthorEntity author = authorRepository.findById(request.getAuthorId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Author not found with id: " + request.getAuthorId()));
+            entity.setAuthor(author);
         }
         if (request.getScriptId() != null) {
-            entity.setScript(entityManager.getReference(ScriptEntity.class, request.getScriptId()));
+            ScriptEntity script = scriptRepository.findById(request.getScriptId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Script not found with id: " + request.getScriptId()));
+            entity.setScript(script);
         }
         entity.setName(request.getName());
         entity.setBiography(request.getBiography());
-        authorDetailRepository.save(entity);
-    }
 
-    @Transactional
-    public void updateAuthorDetail(AuthorDetailDto request) {
-        AuthorDetailEntity entity = authorDetailRepository.findById(request.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("AuthorDetail not found with id: " + request.getId()));
-        if (request.getAuthorId() != null) {
-            entity.setAuthor(entityManager.getReference(AuthorEntity.class, request.getAuthorId()));
-        }
-        if (request.getScriptId() != null) {
-            entity.setScript(entityManager.getReference(ScriptEntity.class, request.getScriptId()));
-        }
-        entity.setName(request.getName());
-        entity.setBiography(request.getBiography());
-        authorDetailRepository.save(entity);
+        AuthorDetailEntity saved = authorDetailRepository.save(entity);
+        return mapToAuthorDetailDto(saved);
     }
 
     public AuthorDetailDto mapToAuthorDetailDto(AuthorDetailEntity entity) {

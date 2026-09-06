@@ -37,4 +37,12 @@ public class GenreController {
         return ResponseEntity.ok(ApiResponse.success("Genre saved successfully", null));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/delete")
+    public ResponseEntity<ApiResponse<Void>> deleteGenre(@RequestBody GenreDto request) {
+        LOGGER.debug("deleteGenre endpoint called");
+        genreService.deleteGenre(request);
+        return ResponseEntity.ok(ApiResponse.success("Genre deleted successfully", null));
+    }
+
 }

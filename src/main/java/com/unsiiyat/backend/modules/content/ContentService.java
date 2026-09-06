@@ -1,5 +1,6 @@
 package com.unsiiyat.backend.modules.content;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -15,11 +16,17 @@ import org.springframework.stereotype.Service;
 import com.unsiiyat.backend.common.exceptions.ResourceNotFoundException;
 import com.unsiiyat.backend.common.response.PagedResponse;
 import com.unsiiyat.backend.modules.author.AuthorEntity;
+import com.unsiiyat.backend.modules.author.AuthorRepository;
+import com.unsiiyat.backend.modules.author.AuthorService;
+import com.unsiiyat.backend.modules.contextText.ContentTextDto;
+import com.unsiiyat.backend.modules.contextText.ContentTextEntity;
+import com.unsiiyat.backend.modules.contextText.ContentTextRepository;
 import com.unsiiyat.backend.modules.genre.GenreEntity;
+import com.unsiiyat.backend.modules.genre.GenreRepository;
+import com.unsiiyat.backend.modules.genre.GenreService;
 import com.unsiiyat.backend.modules.theme.ThemeEntity;
+import com.unsiiyat.backend.modules.theme.ThemeRepository;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 
 @Service
@@ -28,8 +35,23 @@ public class ContentService {
     @Autowired
     private ContentRepository contentRepository;
 
-    @PersistenceContext
-    private EntityManager entityManager;
+    @Autowired
+    private GenreRepository genreRepository;
+
+    @Autowired
+    private AuthorRepository authorRepository;
+
+    @Autowired
+    private ThemeRepository themeRepository;
+
+    @Autowired
+    private AuthorService authorService;
+
+    @Autowired
+    private GenreService genreService;
+
+    @Autowired
+    private ContentTextRepository contentTextRepository;
 
     @Transactional
     public PagedResponse<ContentDto> filterContent(ContentFilterRequest request) {
@@ -48,68 +70,90 @@ public class ContentService {
     }
 
     @Transactional
-    public void addOrUpdateContent(ContentDto request) {
-
+    public ContentDto addOrUpdateContent(ContentDto request) {
+        ContentEntity saved;
         if (request.getId() != null) {
-            updateContent(request);
+            saved = updateContent(request);
         } else {
-            createContent(request);
+            saved = createContent(request);
         }
-
+        return mapToContentDto(saved);
     }
 
     @Transactional
-    public void createContent(ContentDto request) {
+    public ContentEntity createContent(ContentDto request) {
         ContentEntity entity = new ContentEntity();
         if (request.getGenreId() != null) {
-            entity.setGenre(entityManager.getReference(GenreEntity.class, request.getGenreId()));
+            GenreEntity genre = genreRepository.findById(request.getGenreId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Genre not found with id: " + request.getGenreId()));
+            entity.setGenre(genre);
         }
         if (request.getAuthorId() != null) {
-            entity.setAuthor(entityManager.getReference(AuthorEntity.class, request.getAuthorId()));
+            AuthorEntity author = authorRepository.findById(request.getAuthorId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Author not found with id: " + request.getAuthorId()));
+            entity.setAuthor(author);
         }
         entity.setTitle(request.getTitle());
 
         if (request.getThemeIds() != null && !request.getThemeIds().isEmpty()) {
             Set<ThemeEntity> themes = request.getThemeIds().stream()
-                    .map(id -> entityManager.getReference(ThemeEntity.class, id))
+                    .map(id -> themeRepository.findById(id)
+                            .orElseThrow(() -> new ResourceNotFoundException("Theme not found with id: " + id)))
                     .collect(Collectors.toSet());
             entity.setThemes(themes);
         }
 
-        contentRepository.save(entity);
+        return contentRepository.save(entity);
     }
 
     @Transactional
-    public void updateContent(ContentDto request) {
+    public ContentEntity updateContent(ContentDto request) {
         ContentEntity entity = contentRepository.findById(request.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Content not found with id: " + request.getId()));
 
         if (request.getGenreId() != null) {
-            entity.setGenre(entityManager.getReference(GenreEntity.class, request.getGenreId()));
+            GenreEntity genre = genreRepository.findById(request.getGenreId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Genre not found with id: " + request.getGenreId()));
+            entity.setGenre(genre);
         }
         if (request.getAuthorId() != null) {
-            entity.setAuthor(entityManager.getReference(AuthorEntity.class, request.getAuthorId()));
+            AuthorEntity author = authorRepository.findById(request.getAuthorId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Author not found with id: " + request.getAuthorId()));
+            entity.setAuthor(author);
         }
         entity.setTitle(request.getTitle());
 
         if (request.getThemeIds() != null) {
             Set<ThemeEntity> themes = request.getThemeIds().stream()
-                    .map(id -> entityManager.getReference(ThemeEntity.class, id))
+                    .map(id -> themeRepository.findById(id)
+                            .orElseThrow(() -> new ResourceNotFoundException("Theme not found with id: " + id)))
                     .collect(Collectors.toSet());
             entity.setThemes(themes);
         }
 
-        contentRepository.save(entity);
+        return contentRepository.save(entity);
+    }
+
+    @Transactional
+    public void deleteContent(ContentDto request) {
+        ContentEntity entity = contentRepository.findById(request.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Content not found with id: " + request.getId()));
+        contentRepository.delete(entity);
     }
 
     public ContentDto mapToContentDto(ContentEntity entity) {
+        if (entity == null) {
+            return null;
+        }
         ContentDto dto = new ContentDto();
         dto.setId(entity.getId());
         if (entity.getGenre() != null) {
             dto.setGenreId(entity.getGenre().getId());
+            dto.setGenre(genreService.mapToGenreDto(entity.getGenre()));
         }
         if (entity.getAuthor() != null) {
             dto.setAuthorId(entity.getAuthor().getId());
+            dto.setAuthor(authorService.mapToAuthorDto(entity.getAuthor()));
         }
         dto.setTitle(entity.getTitle());
         if (entity.getThemes() != null) {
@@ -117,6 +161,29 @@ public class ContentService {
         }
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
+
+        List<ContentTextEntity> textEntities = entity.getContentTexts();
+        if (textEntities == null || textEntities.isEmpty()) {
+            textEntities = contentTextRepository.findByContentId(entity.getId());
+        }
+
+        if (textEntities != null && !textEntities.isEmpty()) {
+            List<ContentTextDto> textDtos = new ArrayList<>();
+            for (ContentTextEntity t : textEntities) {
+                ContentTextDto tDto = new ContentTextDto();
+                tDto.setId(t.getId());
+                tDto.setContentId(entity.getId());
+                if (t.getScript() != null) {
+                    tDto.setScriptId(t.getScript().getId());
+                }
+                tDto.setTitle(t.getTitle());
+                tDto.setBody(t.getBody());
+                textDtos.add(tDto);
+            }
+            dto.setContentTexts(textDtos);
+            dto.setPrimaryText(textDtos.get(0));
+        }
+
         return dto;
     }
 

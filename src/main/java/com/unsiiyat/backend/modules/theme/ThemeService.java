@@ -66,6 +66,13 @@ public class ThemeService {
         themeRepository.save(entity);
     }
 
+    @Transactional
+    public void deleteTheme(ThemeDto request) {
+        ThemeEntity entity = themeRepository.findById(request.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Theme not found with id: " + request.getId()));
+        themeRepository.delete(entity);
+    }
+
     public ThemeDto mapToThemeDto(ThemeEntity entity) {
         ThemeDto dto = new ThemeDto();
         dto.setId(entity.getId());

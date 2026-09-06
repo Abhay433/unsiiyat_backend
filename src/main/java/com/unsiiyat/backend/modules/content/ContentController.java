@@ -31,10 +31,18 @@ public class ContentController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/addOrUpdate")
-    public ResponseEntity<ApiResponse<Void>> addOrUpdateContent(@RequestBody ContentDto request) {
+    public ResponseEntity<ApiResponse<ContentDto>> addOrUpdateContent(@RequestBody ContentDto request) {
         LOGGER.debug("addOrUpdateContent endpoint called");
-        contentService.addOrUpdateContent(request);
-        return ResponseEntity.ok(ApiResponse.success("Content saved successfully", null));
+        ContentDto response = contentService.addOrUpdateContent(request);
+        return ResponseEntity.ok(ApiResponse.success("Content saved successfully", response));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/delete")
+    public ResponseEntity<ApiResponse<String>> deleteContent(@RequestBody ContentDto request) {
+        LOGGER.debug("deleteContent endpoint called");
+        contentService.deleteContent(request);
+        return ResponseEntity.ok(ApiResponse.success("Content deleted successfully", null));
     }
 
 }

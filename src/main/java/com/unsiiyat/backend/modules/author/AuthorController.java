@@ -31,10 +31,18 @@ public class AuthorController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/addOrUpdate")
-    public ResponseEntity<ApiResponse<Void>> addOrUpdateAuthor(@RequestBody AuthorDto request) {
+    public ResponseEntity<ApiResponse<AuthorDto>> addOrUpdateAuthor(@RequestBody AuthorDto request) {
         LOGGER.debug("addOrUpdateAuthor endpoint called");
-        authorService.addOrUpdateAuthor(request);
-        return ResponseEntity.ok(ApiResponse.success("Author saved successfully", null));
+        AuthorDto response = authorService.addOrUpdateAuthor(request);
+        return ResponseEntity.ok(ApiResponse.success("Author saved successfully", response));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/delete")
+    public ResponseEntity<ApiResponse<String>> deleteAuthor(@RequestBody AuthorDto request) {
+        LOGGER.debug("deleteAuthor endpoint called");
+        authorService.deleteAuthor(request);
+        return ResponseEntity.ok(ApiResponse.success("Author deleted successfully", null));
     }
 
 }

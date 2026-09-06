@@ -38,4 +38,12 @@ public class ThemeController {
         return ResponseEntity.ok(ApiResponse.success("Theme saved successfully", null));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/delete")
+    public ResponseEntity<ApiResponse<Void>> deleteTheme(@RequestBody ThemeDto request) {
+        LOGGER.debug("deleteTheme endpoint called");
+        themeService.deleteTheme(request);
+        return ResponseEntity.ok(ApiResponse.success("Theme deleted successfully", null));
+    }
+
 }
