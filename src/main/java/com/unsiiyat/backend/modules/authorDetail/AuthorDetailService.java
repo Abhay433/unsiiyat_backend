@@ -50,25 +50,54 @@ public class AuthorDetailService {
 
     @Transactional
     public AuthorDetailDto addOrUpdateAuthorDetail(AuthorDetailDto request) {
-        AuthorDetailEntity entity;
+        // 1. Resolve Author if provided
+        AuthorEntity author = null;
+        if (request.getAuthorId() != null) {
+            author = authorRepository.findById(request.getAuthorId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Author not found with id: " + request.getAuthorId()));
+        }
+
+        // 2. Resolve Script if provided
+        ScriptEntity script = null;
+        if (request.getScriptId() != null) {
+            script = scriptRepository.findById(request.getScriptId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Script not found with id: " + request.getScriptId()));
+        }
+
+        // 3. Find target entity
+        AuthorDetailEntity entity = null;
+
+        // Case A: ID is provided
         if (request.getId() != null) {
             entity = authorDetailRepository.findById(request.getId())
                     .orElseThrow(() -> new ResourceNotFoundException("AuthorDetail not found with id: " + request.getId()));
-        } else if (request.getAuthorId() != null && request.getScriptId() != null) {
-            entity = authorDetailRepository.findByAuthorIdAndScriptId(request.getAuthorId(), request.getScriptId())
-                    .orElseGet(AuthorDetailEntity::new);
-        } else {
+        }
+
+        // Case B: Look up by (author_id, script_id) using resolved IDs to avoid duplicate key constraint violations
+        Long resolvedAuthorId = author != null ? author.getId()
+                : (entity != null && entity.getAuthor() != null ? entity.getAuthor().getId() : null);
+        Long resolvedScriptId = script != null ? script.getId()
+                : (entity != null && entity.getScript() != null ? entity.getScript().getId() : null);
+
+        if (resolvedAuthorId != null && resolvedScriptId != null) {
+            java.util.Optional<AuthorDetailEntity> existingOpt = authorDetailRepository.findByAuthorIdAndScriptId(resolvedAuthorId, resolvedScriptId);
+            if (existingOpt.isPresent()) {
+                AuthorDetailEntity existing = existingOpt.get();
+                if (entity == null || !existing.getId().equals(entity.getId())) {
+                    entity = existing;
+                }
+            }
+        }
+
+        // Case C: Still null -> create new
+        if (entity == null) {
             entity = new AuthorDetailEntity();
         }
 
-        if (request.getAuthorId() != null) {
-            AuthorEntity author = authorRepository.findById(request.getAuthorId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Author not found with id: " + request.getAuthorId()));
+        if (author != null) {
             entity.setAuthor(author);
         }
-        if (request.getScriptId() != null) {
-            ScriptEntity script = scriptRepository.findById(request.getScriptId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Script not found with id: " + request.getScriptId()));
+        if (script != null) {
             entity.setScript(script);
         }
         entity.setName(request.getName());

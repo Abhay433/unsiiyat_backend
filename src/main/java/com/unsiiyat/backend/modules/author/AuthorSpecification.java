@@ -15,6 +15,7 @@ public class AuthorSpecification {
         return new SpecificationBuilder<AuthorEntity>()
                 .with(birthDateEqual(filterRequest.getBirthDate()))
                 .with(deathDateEqual(filterRequest.getDeathDate()))
+                .with(searchLike(filterRequest.getSearch()))
                 .build();
     }
 
@@ -33,6 +34,20 @@ public class AuthorSpecification {
                 return null;
             }
             return criteriaBuilder.equal(root.get("deathDate"), deathDate);
+        };
+    }
+
+    public static Specification<AuthorEntity> searchLike(String search) {
+        return (root, query, criteriaBuilder) -> {
+            if (search == null || search.trim().isEmpty()) {
+                return null;
+            }
+            String pattern = "%" + search.trim().toLowerCase() + "%";
+            query.distinct(true);
+            var authorDetailJoin = root.join("authorDetails", jakarta.persistence.criteria.JoinType.LEFT);
+            return criteriaBuilder.or(
+                criteriaBuilder.like(criteriaBuilder.lower(authorDetailJoin.get("name")), pattern)
+            );
         };
     }
 }

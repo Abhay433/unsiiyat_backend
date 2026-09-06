@@ -5,8 +5,10 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 
 public class CustomUserDetails implements UserDetails {
 
@@ -23,8 +25,13 @@ public class CustomUserDetails implements UserDetails {
 		this.password = user.getPassword();
 		this.role = user.getRole() != null ? user.getRole().name() : "ADMIN";
 		this.active = !Boolean.FALSE.equals(user.getIsActive());
-		this.authorities = Collections.singletonList(
-				new SimpleGrantedAuthority("ROLE_" + this.role));
+
+		List<GrantedAuthority> authList = new ArrayList<>();
+		authList.add(new SimpleGrantedAuthority("ROLE_" + this.role));
+		if ("SUPER_ADMIN".equals(this.role)) {
+			authList.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+		}
+		this.authorities = Collections.unmodifiableList(authList);
 	}
 
 	public Long getId() {

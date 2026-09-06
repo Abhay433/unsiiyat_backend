@@ -6,6 +6,7 @@ public class ThemeFilterRequest extends BaseFilterRequest {
 
     private String name;
     private String slug;
+    private String search;
 
     public String getName() {
         return name;
@@ -23,11 +24,20 @@ public class ThemeFilterRequest extends BaseFilterRequest {
         this.slug = slug;
     }
 
+    public String getSearch() {
+        return search;
+    }
+
+    public void setSearch(String search) {
+        this.search = search;
+    }
+
     @Override
     public String toString() {
         return "ThemeFilterRequest{" +
                 "name='" + name + '\'' +
                 ", slug='" + slug + '\'' +
+                ", search='" + search + '\'' +
                 '}' + super.toString();
     }
 

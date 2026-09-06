@@ -29,7 +29,7 @@ public class ScriptController {
         return ResponseEntity.ok(response);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/addOrUpdate")
     public ResponseEntity<ApiResponse<Void>> addOrUpdateScript(@RequestBody ScriptDto request) {
         LOGGER.debug("addOrUpdateScript endpoint called");

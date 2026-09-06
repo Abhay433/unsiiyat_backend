@@ -29,7 +29,7 @@ public class ContentController {
         return ResponseEntity.ok(response);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/addOrUpdate")
     public ResponseEntity<ApiResponse<ContentDto>> addOrUpdateContent(@RequestBody ContentDto request) {
         LOGGER.debug("addOrUpdateContent endpoint called");
@@ -37,7 +37,7 @@ public class ContentController {
         return ResponseEntity.ok(ApiResponse.success("Content saved successfully", response));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/delete")
     public ResponseEntity<ApiResponse<String>> deleteContent(@RequestBody ContentDto request) {
         LOGGER.debug("deleteContent endpoint called");

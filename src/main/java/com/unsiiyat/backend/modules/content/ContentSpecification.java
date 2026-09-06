@@ -13,8 +13,10 @@ public class ContentSpecification {
         return new SpecificationBuilder<ContentEntity>()
                 .with(genreIdEqual(filterRequest.getGenreId()))
                 .with(authorIdEqual(filterRequest.getAuthorId()))
-                .with(titleEqual(filterRequest.getTitle()))
+                .with(titleLike(filterRequest.getTitle()))
+                .with(authorNameLike(filterRequest.getAuthorName()))
                 .with(themeIdEqual(filterRequest.getThemeId()))
+                .with(searchLike(filterRequest.getSearch()))
                 .build();
     }
 
@@ -36,12 +38,71 @@ public class ContentSpecification {
         };
     }
 
-    public static Specification<ContentEntity> titleEqual(String title) {
+    public static Specification<ContentEntity> titleLike(String title) {
         return (root, query, criteriaBuilder) -> {
-            if (title == null) {
+            if (title == null || title.trim().isEmpty()) {
                 return null;
             }
-            return criteriaBuilder.equal(root.get("title"), title);
+            query.distinct(true);
+            String cleanTitle = title.trim();
+            String rawPattern = "%" + cleanTitle.toLowerCase() + "%";
+            String normalizedTitle = com.unsiiyat.backend.common.util.LanguageDetectorUtil.normalizeText(cleanTitle);
+            String normalizedPattern = "%" + normalizedTitle + "%";
+
+            var textJoin = root.join("contentTexts", jakarta.persistence.criteria.JoinType.LEFT);
+            var scriptJoin = textJoin.join("script", jakarta.persistence.criteria.JoinType.LEFT);
+
+            String langCode = com.unsiiyat.backend.common.util.LanguageDetectorUtil.detectLanguageCode(cleanTitle);
+
+            var unaccentTextTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(textJoin.get("title")));
+            var unaccentContentTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(root.get("title")));
+
+            jakarta.persistence.criteria.Predicate contentTextMatch = criteriaBuilder.or(
+                    criteriaBuilder.like(criteriaBuilder.lower(textJoin.get("title")), rawPattern),
+                    criteriaBuilder.like(unaccentTextTitle, normalizedPattern),
+                    criteriaBuilder.like(unaccentTextTitle, rawPattern)
+            );
+
+            if (langCode != null && !"unknown".equalsIgnoreCase(langCode)) {
+                contentTextMatch = criteriaBuilder.or(
+                        criteriaBuilder.and(
+                                criteriaBuilder.equal(criteriaBuilder.lower(scriptJoin.get("code")), langCode.toLowerCase()),
+                                contentTextMatch
+                        ),
+                        contentTextMatch
+                );
+            }
+
+            jakarta.persistence.criteria.Predicate contentTitleMatch = criteriaBuilder.or(
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("title")), rawPattern),
+                    criteriaBuilder.like(unaccentContentTitle, normalizedPattern),
+                    criteriaBuilder.like(unaccentContentTitle, rawPattern)
+            );
+
+            return criteriaBuilder.or(contentTitleMatch, contentTextMatch);
+        };
+    }
+
+    public static Specification<ContentEntity> authorNameLike(String authorName) {
+        return (root, query, criteriaBuilder) -> {
+            if (authorName == null || authorName.trim().isEmpty()) {
+                return null;
+            }
+            query.distinct(true);
+            String clean = authorName.trim();
+            String rawPattern = "%" + clean.toLowerCase() + "%";
+            String normalized = com.unsiiyat.backend.common.util.LanguageDetectorUtil.normalizeText(clean);
+            String normalizedPattern = "%" + normalized + "%";
+
+            var authorJoin = root.join("author", jakarta.persistence.criteria.JoinType.LEFT);
+            var authorDetailJoin = authorJoin.join("authorDetails", jakarta.persistence.criteria.JoinType.LEFT);
+            var unaccentAuthorName = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(authorDetailJoin.get("name")));
+
+            return criteriaBuilder.or(
+                    criteriaBuilder.like(criteriaBuilder.lower(authorDetailJoin.get("name")), rawPattern),
+                    criteriaBuilder.like(unaccentAuthorName, normalizedPattern),
+                    criteriaBuilder.like(unaccentAuthorName, rawPattern)
+            );
         };
     }
 
@@ -52,6 +113,36 @@ public class ContentSpecification {
             }
             query.distinct(true);
             return criteriaBuilder.equal(root.join("themes").get("id"), themeId);
+        };
+    }
+
+    public static Specification<ContentEntity> searchLike(String search) {
+        return (root, query, criteriaBuilder) -> {
+            if (search == null || search.trim().isEmpty()) {
+                return null;
+            }
+            query.distinct(true);
+            String clean = search.trim();
+            String rawPattern = "%" + clean.toLowerCase() + "%";
+            String normalized = com.unsiiyat.backend.common.util.LanguageDetectorUtil.normalizeText(clean);
+            String normalizedPattern = "%" + normalized + "%";
+
+            var authorJoin = root.join("author", jakarta.persistence.criteria.JoinType.LEFT);
+            var authorDetailJoin = authorJoin.join("authorDetails", jakarta.persistence.criteria.JoinType.LEFT);
+            var textJoin = root.join("contentTexts", jakarta.persistence.criteria.JoinType.LEFT);
+
+            var unaccentTextTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(textJoin.get("title")));
+            var unaccentContentTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(root.get("title")));
+            var unaccentAuthorName = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(authorDetailJoin.get("name")));
+
+            return criteriaBuilder.or(
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("title")), rawPattern),
+                    criteriaBuilder.like(unaccentContentTitle, normalizedPattern),
+                    criteriaBuilder.like(criteriaBuilder.lower(textJoin.get("title")), rawPattern),
+                    criteriaBuilder.like(unaccentTextTitle, normalizedPattern),
+                    criteriaBuilder.like(criteriaBuilder.lower(authorDetailJoin.get("name")), rawPattern),
+                    criteriaBuilder.like(unaccentAuthorName, normalizedPattern)
+            );
         };
     }
 }

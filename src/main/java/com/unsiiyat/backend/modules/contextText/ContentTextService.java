@@ -50,29 +50,19 @@ public class ContentTextService {
 
     @Transactional
     public ContentTextDto addOrUpdateContentText(ContentTextDto request) {
-        ContentTextEntity entity;
-        if (request.getId() != null) {
-            entity = contentTextRepository.findById(request.getId())
-                    .orElseThrow(
-                            () -> new ResourceNotFoundException("ContentText not found with id: " + request.getId()));
-        } else if (request.getContentId() != null && request.getScriptId() != null) {
-            entity = contentTextRepository.findByContentIdAndScriptId(request.getContentId(), request.getScriptId())
-                    .orElseGet(ContentTextEntity::new);
-        } else {
-            entity = new ContentTextEntity();
-        }
-
+        // 1. Resolve Content if provided
+        ContentEntity content = null;
         if (request.getContentId() != null) {
-            ContentEntity content = contentRepository.findById(request.getContentId())
+            content = contentRepository.findById(request.getContentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Content not found with id: "
                             + request.getContentId() + ". Please create the content record first."));
-            entity.setContent(content);
         }
+
+        // 2. Resolve Script if provided (supporting standard fallback by code)
+        ScriptEntity script = null;
         if (request.getScriptId() != null) {
-            ScriptEntity script = scriptRepository.findById(request.getScriptId())
+            script = scriptRepository.findById(request.getScriptId())
                     .orElseGet(() -> {
-                        // Fallback: check or create standard script by code if ID 1, 2, or 3 doesn't
-                        // exist yet
                         String defaultCode = request.getScriptId() == 1L ? "ur"
                                 : (request.getScriptId() == 2L ? "hi" : (request.getScriptId() == 3L ? "en" : null));
                         String defaultName = request.getScriptId() == 1L ? "Urdu"
@@ -85,6 +75,43 @@ public class ContentTextService {
                         }
                         throw new ResourceNotFoundException("Script not found with id: " + request.getScriptId());
                     });
+        }
+
+        // 3. Find target entity
+        ContentTextEntity entity = null;
+
+        // Case A: ID is provided
+        if (request.getId() != null) {
+            entity = contentTextRepository.findById(request.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("ContentText not found with id: " + request.getId()));
+        }
+
+        // Case B: Look up by (content_id, script_id) using resolved IDs to avoid duplicate key constraint violations
+        Long resolvedContentId = content != null ? content.getId()
+                : (entity != null && entity.getContent() != null ? entity.getContent().getId() : null);
+        Long resolvedScriptId = script != null ? script.getId()
+                : (entity != null && entity.getScript() != null ? entity.getScript().getId() : null);
+
+        if (resolvedContentId != null && resolvedScriptId != null) {
+            java.util.Optional<ContentTextEntity> existingOpt = contentTextRepository.findByContentIdAndScriptId(resolvedContentId, resolvedScriptId);
+            if (existingOpt.isPresent()) {
+                ContentTextEntity existing = existingOpt.get();
+                // If entity was null (no id was provided) OR if an existing row already exists with this (content_id, script_id)
+                if (entity == null || !existing.getId().equals(entity.getId())) {
+                    entity = existing;
+                }
+            }
+        }
+
+        // Case C: Still null -> create new
+        if (entity == null) {
+            entity = new ContentTextEntity();
+        }
+
+        if (content != null) {
+            entity.setContent(content);
+        }
+        if (script != null) {
             entity.setScript(script);
         }
         entity.setTitle(request.getTitle());

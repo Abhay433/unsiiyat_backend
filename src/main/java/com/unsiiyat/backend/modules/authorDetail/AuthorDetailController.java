@@ -29,7 +29,7 @@ public class AuthorDetailController {
         return ResponseEntity.ok(response);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/addOrUpdate")
     public ResponseEntity<ApiResponse<AuthorDetailDto>> addOrUpdateAuthorDetail(@RequestBody AuthorDetailDto request) {
         LOGGER.debug("addOrUpdateAuthorDetail endpoint called");

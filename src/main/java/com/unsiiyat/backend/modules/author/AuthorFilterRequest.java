@@ -8,6 +8,7 @@ public class AuthorFilterRequest extends BaseFilterRequest {
 
     private LocalDate birthDate;
     private LocalDate deathDate;
+    private String search;
 
     public LocalDate getBirthDate() {
         return birthDate;
@@ -25,11 +26,20 @@ public class AuthorFilterRequest extends BaseFilterRequest {
         this.deathDate = deathDate;
     }
 
+    public String getSearch() {
+        return search;
+    }
+
+    public void setSearch(String search) {
+        this.search = search;
+    }
+
     @Override
     public String toString() {
         return "AuthorFilterRequest{" +
                 "birthDate=" + birthDate +
                 ", deathDate=" + deathDate +
+                ", search='" + search + '\'' +
                 '}' + super.toString();
     }
 }

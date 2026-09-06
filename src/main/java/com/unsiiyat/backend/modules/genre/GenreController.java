@@ -29,7 +29,7 @@ public class GenreController {
         return ResponseEntity.ok(response);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/addOrUpdate")
     public ResponseEntity<ApiResponse<Void>> addOrUpdateGenre(@RequestBody GenreDto request) {
         LOGGER.debug("addOrUpdateGenre endpoint called");
@@ -37,7 +37,7 @@ public class GenreController {
         return ResponseEntity.ok(ApiResponse.success("Genre saved successfully", null));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/delete")
     public ResponseEntity<ApiResponse<Void>> deleteGenre(@RequestBody GenreDto request) {
         LOGGER.debug("deleteGenre endpoint called");

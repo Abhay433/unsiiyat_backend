@@ -29,7 +29,7 @@ public class AuthorController {
         return ResponseEntity.ok(response);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/addOrUpdate")
     public ResponseEntity<ApiResponse<AuthorDto>> addOrUpdateAuthor(@RequestBody AuthorDto request) {
         LOGGER.debug("addOrUpdateAuthor endpoint called");
@@ -37,7 +37,7 @@ public class AuthorController {
         return ResponseEntity.ok(ApiResponse.success("Author saved successfully", response));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/delete")
     public ResponseEntity<ApiResponse<String>> deleteAuthor(@RequestBody AuthorDto request) {
         LOGGER.debug("deleteAuthor endpoint called");

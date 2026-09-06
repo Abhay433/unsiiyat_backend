@@ -32,7 +32,7 @@ public class AuthService {
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(requestDto.getPassword()));
         user.setName(requestDto.getName());
-        user.setRole(requestDto.getRole() != null ? requestDto.getRole() : UserRole.ADMIN);
+        user.setRole(UserRole.ADMIN); // Strictly ADMIN by default
         user.setIsActive(true);
 
         UserEntity savedUser = userRepository.save(user);

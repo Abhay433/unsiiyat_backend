@@ -30,7 +30,7 @@ public class ThemeController {
         return ResponseEntity.ok(response);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/addOrUpdate")
     public ResponseEntity<ApiResponse<Void>> addOrUpdateTheme(@RequestBody ThemeDto request) {
         LOGGER.debug("addOrUpdateTheme endpoint called");
@@ -38,7 +38,7 @@ public class ThemeController {
         return ResponseEntity.ok(ApiResponse.success("Theme saved successfully", null));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     @PostMapping("/delete")
     public ResponseEntity<ApiResponse<Void>> deleteTheme(@RequestBody ThemeDto request) {
         LOGGER.debug("deleteTheme endpoint called");

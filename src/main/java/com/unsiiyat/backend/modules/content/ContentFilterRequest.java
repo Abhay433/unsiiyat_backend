@@ -8,6 +8,8 @@ public class ContentFilterRequest extends BaseFilterRequest {
     private Long authorId;
     private String title;
     private Long themeId;
+    private String search;
+    private String authorName;
 
     public Long getGenreId() {
         return genreId;
@@ -41,6 +43,22 @@ public class ContentFilterRequest extends BaseFilterRequest {
         this.themeId = themeId;
     }
 
+    public String getSearch() {
+        return search;
+    }
+
+    public void setSearch(String search) {
+        this.search = search;
+    }
+
+    public String getAuthorName() {
+        return authorName;
+    }
+
+    public void setAuthorName(String authorName) {
+        this.authorName = authorName;
+    }
+
     @Override
     public String toString() {
         return "ContentFilterRequest{" +
@@ -48,6 +66,8 @@ public class ContentFilterRequest extends BaseFilterRequest {
                 ", authorId=" + authorId +
                 ", title='" + title + '\'' +
                 ", themeId=" + themeId +
+                ", search='" + search + '\'' +
+                ", authorName='" + authorName + '\'' +
                 '}' + super.toString();
     }
 }

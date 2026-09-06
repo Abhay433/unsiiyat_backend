@@ -13,6 +13,7 @@ public class GenreSpecification {
         return new SpecificationBuilder<GenreEntity>()
                 .with(nameEqual(filterRequest.getName()))
                 .with(slugEqual(filterRequest.getSlug()))
+                .with(searchLike(filterRequest.getSearch()))
                 .build();
     }
 
@@ -31,6 +32,19 @@ public class GenreSpecification {
                 return null;
             }
             return criteriaBuilder.equal(root.get("slug"), slug);
+        };
+    }
+
+    public static Specification<GenreEntity> searchLike(String search) {
+        return (root, query, criteriaBuilder) -> {
+            if (search == null || search.trim().isEmpty()) {
+                return null;
+            }
+            String pattern = "%" + search.trim().toLowerCase() + "%";
+            return criteriaBuilder.or(
+                criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), pattern),
+                criteriaBuilder.like(criteriaBuilder.lower(root.get("slug")), pattern)
+            );
         };
     }
 }
