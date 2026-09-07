@@ -11,6 +11,10 @@ public class GenreSearchResultDto {
     private String genreName;
     private String genreSlug;
     private long totalCount;
+    private int page = 0;
+    private int pageSize = 5;
+    private int totalPages = 0;
+    private boolean hasMore = false;
     private List<ContentDto> contents = new ArrayList<>();
 
     public GenreSearchResultDto() {
@@ -21,6 +25,18 @@ public class GenreSearchResultDto {
         this.genreName = genreName;
         this.genreSlug = genreSlug;
         this.totalCount = totalCount;
+        this.contents = contents;
+    }
+
+    public GenreSearchResultDto(Long genreId, String genreName, String genreSlug, long totalCount, int page, int pageSize, int totalPages, boolean hasMore, List<ContentDto> contents) {
+        this.genreId = genreId;
+        this.genreName = genreName;
+        this.genreSlug = genreSlug;
+        this.totalCount = totalCount;
+        this.page = page;
+        this.pageSize = pageSize;
+        this.totalPages = totalPages;
+        this.hasMore = hasMore;
         this.contents = contents;
     }
 
@@ -54,6 +70,38 @@ public class GenreSearchResultDto {
 
     public void setTotalCount(long totalCount) {
         this.totalCount = totalCount;
+    }
+
+    public int getPage() {
+        return page;
+    }
+
+    public void setPage(int page) {
+        this.page = page;
+    }
+
+    public int getPageSize() {
+        return pageSize;
+    }
+
+    public void setPageSize(int pageSize) {
+        this.pageSize = pageSize;
+    }
+
+    public int getTotalPages() {
+        return totalPages;
+    }
+
+    public void setTotalPages(int totalPages) {
+        this.totalPages = totalPages;
+    }
+
+    public boolean isHasMore() {
+        return hasMore;
+    }
+
+    public void setHasMore(boolean hasMore) {
+        this.hasMore = hasMore;
     }
 
     public List<ContentDto> getContents() {

@@ -6,9 +6,36 @@ import com.unsiiyat.backend.common.filters.BaseFilterRequest;
 
 public class AuthorFilterRequest extends BaseFilterRequest {
 
+    private Long id;
+    private Long scriptId;
+    private String scriptCode;
     private LocalDate birthDate;
     private LocalDate deathDate;
     private String search;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Long getScriptId() {
+        return scriptId;
+    }
+
+    public void setScriptId(Long scriptId) {
+        this.scriptId = scriptId;
+    }
+
+    public String getScriptCode() {
+        return scriptCode;
+    }
+
+    public void setScriptCode(String scriptCode) {
+        this.scriptCode = scriptCode;
+    }
 
     public LocalDate getBirthDate() {
         return birthDate;
@@ -37,9 +64,12 @@ public class AuthorFilterRequest extends BaseFilterRequest {
     @Override
     public String toString() {
         return "AuthorFilterRequest{" +
-                "birthDate=" + birthDate +
+                "id=" + id +
+                ", scriptId=" + scriptId +
+                ", scriptCode='" + scriptCode + "'" +
+                ", birthDate=" + birthDate +
                 ", deathDate=" + deathDate +
-                ", search='" + search + '\'' +
+                ", search='" + search + "'" +
                 '}' + super.toString();
     }
 }

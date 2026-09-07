@@ -11,13 +11,48 @@ public class ContentSpecification {
 
     public static Specification<ContentEntity> filter(ContentFilterRequest filterRequest) {
         return new SpecificationBuilder<ContentEntity>()
+                .with(idEqual(filterRequest.getId()))
                 .with(genreIdEqual(filterRequest.getGenreId()))
                 .with(authorIdEqual(filterRequest.getAuthorId()))
                 .with(titleLike(filterRequest.getTitle()))
                 .with(authorNameLike(filterRequest.getAuthorName()))
                 .with(themeIdEqual(filterRequest.getThemeId()))
                 .with(searchLike(filterRequest.getSearch()))
+                .with(scriptIdEqual(filterRequest.getScriptId()))
+                .with(scriptCodeEqual(filterRequest.getScriptCode()))
                 .build();
+    }
+
+    public static Specification<ContentEntity> idEqual(Long id) {
+        return (root, query, criteriaBuilder) -> {
+            if (id == null) {
+                return null;
+            }
+            return criteriaBuilder.equal(root.get("id"), id);
+        };
+    }
+
+    public static Specification<ContentEntity> scriptIdEqual(Long scriptId) {
+        return (root, query, criteriaBuilder) -> {
+            if (scriptId == null) {
+                return null;
+            }
+            query.distinct(true);
+            var textJoin = root.join("contentTexts", jakarta.persistence.criteria.JoinType.INNER);
+            return criteriaBuilder.equal(textJoin.get("script").get("id"), scriptId);
+        };
+    }
+
+    public static Specification<ContentEntity> scriptCodeEqual(String scriptCode) {
+        return (root, query, criteriaBuilder) -> {
+            if (scriptCode == null || scriptCode.trim().isEmpty()) {
+                return null;
+            }
+            query.distinct(true);
+            var textJoin = root.join("contentTexts", jakarta.persistence.criteria.JoinType.INNER);
+            var scriptJoin = textJoin.join("script", jakarta.persistence.criteria.JoinType.INNER);
+            return criteriaBuilder.equal(criteriaBuilder.lower(scriptJoin.get("code")), scriptCode.trim().toLowerCase());
+        };
     }
 
     public static Specification<ContentEntity> genreIdEqual(Long genreId) {
@@ -55,7 +90,6 @@ public class ContentSpecification {
             String langCode = com.unsiiyat.backend.common.util.LanguageDetectorUtil.detectLanguageCode(cleanTitle);
 
             var unaccentTextTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(textJoin.get("title")));
-            var unaccentContentTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(root.get("title")));
 
             jakarta.persistence.criteria.Predicate contentTextMatch = criteriaBuilder.or(
                     criteriaBuilder.like(criteriaBuilder.lower(textJoin.get("title")), rawPattern),
@@ -73,13 +107,7 @@ public class ContentSpecification {
                 );
             }
 
-            jakarta.persistence.criteria.Predicate contentTitleMatch = criteriaBuilder.or(
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("title")), rawPattern),
-                    criteriaBuilder.like(unaccentContentTitle, normalizedPattern),
-                    criteriaBuilder.like(unaccentContentTitle, rawPattern)
-            );
-
-            return criteriaBuilder.or(contentTitleMatch, contentTextMatch);
+            return contentTextMatch;
         };
     }
 
@@ -132,12 +160,9 @@ public class ContentSpecification {
             var textJoin = root.join("contentTexts", jakarta.persistence.criteria.JoinType.LEFT);
 
             var unaccentTextTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(textJoin.get("title")));
-            var unaccentContentTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(root.get("title")));
             var unaccentAuthorName = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(authorDetailJoin.get("name")));
 
             return criteriaBuilder.or(
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("title")), rawPattern),
-                    criteriaBuilder.like(unaccentContentTitle, normalizedPattern),
                     criteriaBuilder.like(criteriaBuilder.lower(textJoin.get("title")), rawPattern),
                     criteriaBuilder.like(unaccentTextTitle, normalizedPattern),
                     criteriaBuilder.like(criteriaBuilder.lower(authorDetailJoin.get("name")), rawPattern),

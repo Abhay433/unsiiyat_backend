@@ -40,6 +40,9 @@ public class AuthorService {
     @Autowired
     private ContentRepository contentRepository;
 
+    @Autowired
+    private com.unsiiyat.backend.modules.s3bucket.FileService fileService;
+
     @Transactional
     public PagedResponse<AuthorDto> filterAuthor(AuthorFilterRequest request) {
 
@@ -49,7 +52,16 @@ public class AuthorService {
         Page<AuthorEntity> page = authorRepository
                 .findAll(AuthorSpecification.filter(request), pageable);
 
-        List<AuthorDto> dtoList = page.getContent().stream().map(this::mapToAuthorDto)
+        Long preferredScriptId = request.getScriptId();
+        if (preferredScriptId == null && request.getScriptCode() != null) {
+            preferredScriptId = scriptRepository.findByCode(request.getScriptCode())
+                    .map(ScriptEntity::getId)
+                    .orElse(null);
+        }
+
+        final Long sId = preferredScriptId;
+        List<AuthorDto> dtoList = page.getContent().stream()
+                .map(author -> this.mapToAuthorDto(author, sId))
                 .collect(Collectors.toList());
 
         Page<AuthorDto> dtoPage = new PageImpl<>(dtoList, page.getPageable(), page.getTotalElements());
@@ -65,7 +77,7 @@ public class AuthorService {
             saved = createAuthor(request);
         }
 
-        saveAuthorNameDetails(saved, request);
+        saveAuthorDetails(saved, request);
 
         return mapToAuthorDto(saved);
     }
@@ -75,6 +87,10 @@ public class AuthorService {
         AuthorEntity entity = new AuthorEntity();
         entity.setBirthDate(request.getBirthDate());
         entity.setDeathDate(request.getDeathDate());
+        if (request.getAvatarUrl() != null && !request.getAvatarUrl().trim().isEmpty()) {
+            entity.setAvatarUrl(request.getAvatarUrl().trim());
+        }
+        entity.setAvatarUrl(request.getAvatarUrl());
         return authorRepository.save(entity);
     }
 
@@ -84,37 +100,74 @@ public class AuthorService {
                 .orElseThrow(() -> new ResourceNotFoundException("Author not found with id: " + request.getId()));
         entity.setBirthDate(request.getBirthDate());
         entity.setDeathDate(request.getDeathDate());
+        if (request.getAvatarUrl() != null && !request.getAvatarUrl().trim().isEmpty()) {
+            entity.setAvatarUrl(request.getAvatarUrl().trim());
+        }
         return authorRepository.save(entity);
     }
 
-    private void saveAuthorNameDetails(AuthorEntity author, AuthorDto request) {
-        if (request.getUrName() != null && !request.getUrName().trim().isEmpty()) {
-            saveOrUpdateDetail(author, "ur", "Urdu", request.getUrName().trim());
-        }
-        if (request.getHiName() != null && !request.getHiName().trim().isEmpty()) {
-            saveOrUpdateDetail(author, "hi", "Hindi", request.getHiName().trim());
-        }
-        if (request.getEnName() != null && !request.getEnName().trim().isEmpty()) {
-            saveOrUpdateDetail(author, "en", "English", request.getEnName().trim());
-        } else if (request.getName() != null && !request.getName().trim().isEmpty()) {
-            saveOrUpdateDetail(author, "en", "English", request.getName().trim());
-        } else if (request.getPrimaryName() != null && !request.getPrimaryName().trim().isEmpty()) {
-            saveOrUpdateDetail(author, "en", "English", request.getPrimaryName().trim());
+    private void saveAuthorDetails(AuthorEntity author, AuthorDto request) {
+        // 1. Process nested authorDetails or details list if provided
+        List<AuthorDetailDto> detailList = request.getAuthorDetails();
+        if (detailList == null || detailList.isEmpty()) {
+            detailList = request.getDetails();
         }
 
-        if (request.getDetails() != null) {
-            for (AuthorDetailDto d : request.getDetails()) {
-                if (d.getName() != null && !d.getName().trim().isEmpty() && d.getScriptId() != null) {
-                    ScriptEntity script = scriptRepository.findById(d.getScriptId()).orElse(null);
-                    if (script != null) {
-                        saveOrUpdateDetail(author, script.getCode(), script.getName(), d.getName().trim());
-                    }
+        if (detailList != null && !detailList.isEmpty()) {
+            for (AuthorDetailDto d : detailList) {
+                if (d == null) continue;
+
+                ScriptEntity script = resolveScript(d.getScriptId(), d.getName());
+                if (script == null) continue;
+
+                String name = d.getName() != null ? d.getName().trim() : "";
+                String bio = d.getBiography() != null ? d.getBiography().trim() : "";
+
+                if (name.isEmpty() && bio.isEmpty()) {
+                    continue;
                 }
+
+                AuthorDetailEntity detail = authorDetailRepository
+                        .findByAuthorIdAndScriptId(author.getId(), script.getId())
+                        .orElseGet(() -> {
+                            if (d.getId() != null) {
+                                return authorDetailRepository.findById(d.getId()).orElseGet(AuthorDetailEntity::new);
+                            }
+                            return new AuthorDetailEntity();
+                        });
+
+                detail.setAuthor(author);
+                detail.setScript(script);
+                if (!name.isEmpty()) {
+                    detail.setName(name);
+                }
+                detail.setBiography(bio);
+                authorDetailRepository.save(detail);
             }
+        }
+
+        // 2. Process flat / convenience fields (urName, urBio, hiName, hiBio, enName, enBio)
+        if ((request.getUrName() != null && !request.getUrName().trim().isEmpty())
+                || (request.getUrBio() != null && !request.getUrBio().trim().isEmpty())) {
+            saveOrUpdateDetail(author, "ur", "Urdu", request.getUrName(), request.getUrBio());
+        }
+
+        if ((request.getHiName() != null && !request.getHiName().trim().isEmpty())
+                || (request.getHiBio() != null && !request.getHiBio().trim().isEmpty())) {
+            saveOrUpdateDetail(author, "hi", "Hindi", request.getHiName(), request.getHiBio());
+        }
+
+        if ((request.getEnName() != null && !request.getEnName().trim().isEmpty())
+                || (request.getEnBio() != null && !request.getEnBio().trim().isEmpty())) {
+            saveOrUpdateDetail(author, "en", "English", request.getEnName(), request.getEnBio());
+        } else if (request.getName() != null && !request.getName().trim().isEmpty()) {
+            saveOrUpdateDetail(author, "en", "English", request.getName(), request.getPrimaryBio());
+        } else if (request.getPrimaryName() != null && !request.getPrimaryName().trim().isEmpty()) {
+            saveOrUpdateDetail(author, "en", "English", request.getPrimaryName(), request.getPrimaryBio());
         }
     }
 
-    private void saveOrUpdateDetail(AuthorEntity author, String scriptCode, String scriptName, String name) {
+    private void saveOrUpdateDetail(AuthorEntity author, String scriptCode, String scriptName, String name, String biography) {
         ScriptEntity script = scriptRepository.findByCode(scriptCode)
                 .orElseGet(() -> scriptRepository
                         .save(new ScriptEntity(scriptCode, scriptName, LocalDateTime.now(), LocalDateTime.now())));
@@ -126,8 +179,39 @@ public class AuthorService {
                     d.setScript(script);
                     return d;
                 });
-        detail.setName(name);
+
+        if (name != null && !name.trim().isEmpty()) {
+            detail.setName(name.trim());
+        }
+        if (biography != null) {
+            detail.setBiography(biography.trim());
+        }
         authorDetailRepository.save(detail);
+    }
+
+    private ScriptEntity resolveScript(Long scriptId, String name) {
+        if (scriptId != null) {
+            return scriptRepository.findById(scriptId)
+                    .orElseGet(() -> {
+                        String defaultCode = scriptId == 1L ? "ur"
+                                : (scriptId == 2L ? "hi" : (scriptId == 3L ? "en" : null));
+                        String defaultName = scriptId == 1L ? "Urdu"
+                                : (scriptId == 2L ? "Hindi" : (scriptId == 3L ? "English" : null));
+                        if (defaultCode != null) {
+                            return scriptRepository.findByCode(defaultCode)
+                                    .orElseGet(() -> scriptRepository.save(new ScriptEntity(defaultCode, defaultName,
+                                            LocalDateTime.now(), LocalDateTime.now())));
+                        }
+                        return null;
+                    });
+        }
+        if (name != null && !name.trim().isEmpty()) {
+            String detectedCode = com.unsiiyat.backend.common.util.LanguageDetectorUtil.detectLanguageCode(name);
+            if (detectedCode != null && !"unknown".equalsIgnoreCase(detectedCode)) {
+                return scriptRepository.findByCode(detectedCode).orElse(null);
+            }
+        }
+        return null;
     }
 
     @Transactional
@@ -143,12 +227,35 @@ public class AuthorService {
         authorRepository.delete(entity);
     }
 
+    @Transactional
+    public String updateAuthorPhoto(Long authorId, org.springframework.web.multipart.MultipartFile file) {
+        AuthorEntity author = authorRepository.findById(authorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Author not found with id: " + authorId));
+        String oldPhotoUrl = author.getAvatarUrl();
+        com.unsiiyat.backend.modules.s3bucket.UploadedFileDto uploaded = fileService.uploadAndSave(file);
+        author.setAvatarUrl(uploaded.getFilePath());
+        authorRepository.save(author);
+        if (oldPhotoUrl != null && !oldPhotoUrl.isBlank()) {
+            try {
+                fileService.deleteFileByPath(oldPhotoUrl);
+            } catch (Exception e) {
+                // ignore error if previous file could not be deleted
+            }
+        }
+        return uploaded.getFilePath();
+    }
+
     public AuthorDto mapToAuthorDto(AuthorEntity entity) {
+        return mapToAuthorDto(entity, null);
+    }
+
+    public AuthorDto mapToAuthorDto(AuthorEntity entity, Long preferredScriptId) {
         if (entity == null) {
             return null;
         }
         AuthorDto dto = new AuthorDto();
         dto.setId(entity.getId());
+        dto.setAvatarUrl(entity.getAvatarUrl());
         dto.setBirthDate(entity.getBirthDate());
         dto.setDeathDate(entity.getDeathDate());
         dto.setCreatedAt(entity.getCreatedAt());
@@ -161,19 +268,28 @@ public class AuthorService {
 
         if (details != null && !details.isEmpty()) {
             List<AuthorDetailDto> detailDtos = new ArrayList<>();
+            AuthorDetailDto preferredDetail = null;
+
             for (AuthorDetailEntity d : details) {
                 AuthorDetailDto dDto = new AuthorDetailDto();
                 dDto.setId(d.getId());
                 dDto.setAuthorId(entity.getId());
                 if (d.getScript() != null) {
-                    dDto.setScriptId(d.getScript().getId());
+                    Long sId = d.getScript().getId();
+                    dDto.setScriptId(sId);
                     String code = d.getScript().getCode();
                     if ("ur".equalsIgnoreCase(code)) {
                         dto.setUrName(d.getName());
+                        dto.setUrBio(d.getBiography());
                     } else if ("hi".equalsIgnoreCase(code)) {
                         dto.setHiName(d.getName());
+                        dto.setHiBio(d.getBiography());
                     } else if ("en".equalsIgnoreCase(code)) {
                         dto.setEnName(d.getName());
+                        dto.setEnBio(d.getBiography());
+                    }
+                    if (preferredScriptId != null && sId.equals(preferredScriptId)) {
+                        preferredDetail = dDto;
                     }
                 }
                 dDto.setName(d.getName());
@@ -183,12 +299,20 @@ public class AuthorService {
             dto.setDetails(detailDtos);
             dto.setAuthorDetails(detailDtos);
 
-            String primary = dto.getPrimaryName() != null ? dto.getPrimaryName()
-                    : (dto.getEnName() != null ? dto.getEnName()
-                            : (dto.getUrName() != null ? dto.getUrName()
-                                    : (dto.getHiName() != null ? dto.getHiName() : detailDtos.get(0).getName())));
-            dto.setPrimaryName(primary);
-            dto.setName(primary);
+            AuthorDetailDto active = preferredDetail;
+            if (active == null) {
+                active = detailDtos.stream()
+                        .filter(d -> dto.getEnName() != null && dto.getEnName().equals(d.getName()))
+                        .findFirst()
+                        .orElseGet(() -> detailDtos.stream()
+                                .filter(d -> dto.getUrName() != null && dto.getUrName().equals(d.getName()))
+                                .findFirst()
+                                .orElse(detailDtos.get(0)));
+            }
+
+            dto.setPrimaryName(active.getName());
+            dto.setName(active.getName());
+            dto.setPrimaryBio(active.getBiography());
         }
 
         return dto;

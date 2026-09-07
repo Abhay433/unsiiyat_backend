@@ -4,12 +4,22 @@ public class SearchRequestDto {
 
     private String text;
     private String query;
+    private Integer page = 0;
+    private Integer size;
+    private Long genreId;
+    private String type;
 
     public SearchRequestDto() {
     }
 
     public SearchRequestDto(String text) {
         this.text = text;
+    }
+
+    public SearchRequestDto(String text, Integer page, Integer size) {
+        this.text = text;
+        this.page = page;
+        this.size = size;
     }
 
     public String getText() {
@@ -31,10 +41,46 @@ public class SearchRequestDto {
         this.query = query;
     }
 
+    public Integer getPage() {
+        return page;
+    }
+
+    public void setPage(Integer page) {
+        this.page = page;
+    }
+
+    public Integer getSize() {
+        return size;
+    }
+
+    public void setSize(Integer size) {
+        this.size = size;
+    }
+
+    public Long getGenreId() {
+        return genreId;
+    }
+
+    public void setGenreId(Long genreId) {
+        this.genreId = genreId;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+
     @Override
     public String toString() {
         return "SearchRequestDto{" +
                 "text='" + getText() + '\'' +
+                ", page=" + page +
+                ", size=" + size +
+                ", genreId=" + genreId +
+                ", type='" + type + '\'' +
                 '}';
     }
 }

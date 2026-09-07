@@ -6,12 +6,14 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.unsiiyat.backend.common.exceptions.ResourceNotFoundException;
+import com.unsiiyat.backend.common.filters.OffsetLimitPageRequest;
 import com.unsiiyat.backend.common.util.LanguageDetectorUtil;
 import com.unsiiyat.backend.modules.author.AuthorDto;
 import com.unsiiyat.backend.modules.author.AuthorEntity;
@@ -52,6 +54,8 @@ public class SearchService {
         }
 
         String cleanText = text.trim();
+        int page = (request != null && request.getPage() != null && request.getPage() >= 0) ? request.getPage() : 0;
+        Integer requestedSize = (request != null && request.getSize() != null && request.getSize() > 0) ? request.getSize() : null;
 
         // 1. Detect language / script
         LanguageDetectorUtil.LanguageType langType = LanguageDetectorUtil.detectLanguage(cleanText);
@@ -60,19 +64,130 @@ public class SearchService {
         String normalizedText = LanguageDetectorUtil.normalizeText(cleanText);
 
         SearchResponseDto response = new SearchResponseDto(cleanText, scriptCode, scriptName);
+        response.setPage(page);
 
-        // 2. Search Authors (Max 5 data)
-        List<AuthorDto> authors = searchAuthors(cleanText, scriptCode, normalizedText, 5);
-        response.setAuthors(authors);
+        // Content Pagination rule:
+        // First time (page 0): default size = 5
+        // Next time (page 1 onwards): default size = 10 (10-10 kr ke)
+        long contentOffset;
+        int contentLimit;
+        if (page == 0) {
+            contentLimit = (requestedSize != null) ? requestedSize : 5;
+            contentOffset = 0;
+        } else {
+            contentLimit = (requestedSize != null) ? requestedSize : 10;
+            contentOffset = 5L + (long) (page - 1) * contentLimit;
+        }
 
-        // 3. Search Contents (Max 10 data per genre)
-        List<GenreSearchResultDto> resultsByGenre = searchContentsByGenre(cleanText, scriptCode, normalizedText, 10);
-        response.setResultsByGenre(resultsByGenre);
+        // Author Pagination rule:
+        // First time (page 0): default size = 3
+        // Next time (page 1 onwards): default size = 10 (10-10 kr ke)
+        long authorOffset;
+        int authorLimit;
+        if (page == 0) {
+            authorLimit = (requestedSize != null) ? requestedSize : 3;
+            authorOffset = 0;
+        } else {
+            authorLimit = (requestedSize != null) ? requestedSize : 10;
+            authorOffset = 3L + (long) (page - 1) * authorLimit;
+        }
+        String type = request != null ? request.getType() : null;
+        Long targetGenreId = request != null ? request.getGenreId() : null;
+
+        if ("authors".equalsIgnoreCase(type)) {
+            response.setPageSize(authorLimit);
+        } else {
+            response.setPageSize(contentLimit);
+        }
+
+        // 2. Search Authors (Max 3 on initial search)
+        if (type == null || "all".equalsIgnoreCase(type) || "authors".equalsIgnoreCase(type)) {
+            Page<AuthorEntity> authorPage = searchAuthorsPage(cleanText, scriptCode, normalizedText, authorOffset, authorLimit);
+            List<AuthorDto> authors = authorPage.getContent().stream()
+                    .map(authorService::mapToAuthorDto)
+                    .collect(Collectors.toList());
+            response.setAuthors(authors);
+            long totalAuthors = authorPage.getTotalElements();
+            response.setTotalAuthors(totalAuthors);
+            response.setTotalAuthorPages(calculateAuthorTotalPages(totalAuthors));
+            response.setAuthorsHasMore((authorOffset + authors.size()) < totalAuthors);
+        }
+
+        // 3. Search Contents (by genre)
+        if (type == null || "all".equalsIgnoreCase(type) || "contents".equalsIgnoreCase(type)) {
+            List<GenreSearchResultDto> resultsByGenre = searchContentsByGenre(cleanText, scriptCode, normalizedText, targetGenreId, page, contentOffset, contentLimit);
+            response.setResultsByGenre(resultsByGenre);
+        }
 
         return response;
     }
 
-    private List<AuthorDto> searchAuthors(String text, String scriptCode, String normalizedText, int limit) {
+    @Transactional(readOnly = true)
+    public GenreSearchResultDto searchGenreContents(SearchRequestDto request) {
+        String text = request != null ? request.getText() : "";
+        Long genreId = request != null ? request.getGenreId() : null;
+        if (genreId == null) {
+            throw new ResourceNotFoundException("Genre ID is required for genre contents search");
+        }
+
+        int page = (request != null && request.getPage() != null && request.getPage() >= 0) ? request.getPage() : 0;
+        Integer requestedSize = (request != null && request.getSize() != null && request.getSize() > 0) ? request.getSize() : null;
+
+        long offset;
+        int limit;
+        if (page == 0) {
+            limit = (requestedSize != null) ? requestedSize : 5;
+            offset = 0;
+        } else {
+            limit = (requestedSize != null) ? requestedSize : 10;
+            offset = 5L + (long) (page - 1) * limit;
+        }
+
+        String cleanText = (text != null) ? text.trim() : "";
+        LanguageDetectorUtil.LanguageType langType = LanguageDetectorUtil.detectLanguage(cleanText);
+        String scriptCode = langType.getCode();
+        String normalizedText = LanguageDetectorUtil.normalizeText(cleanText);
+
+        List<GenreSearchResultDto> results = searchContentsByGenre(cleanText, scriptCode, normalizedText, genreId, page, offset, limit);
+        if (!results.isEmpty()) {
+            return results.get(0);
+        }
+
+        GenreEntity genre = genreRepository.findById(genreId)
+                .orElseThrow(() -> new ResourceNotFoundException("Genre not found with id: " + genreId));
+        return new GenreSearchResultDto(genre.getId(), genre.getName(), genre.getSlug(), 0, page, limit, 0, false, List.of());
+    }
+
+    @Transactional(readOnly = true)
+    public SearchResponseDto searchAuthorsOnly(SearchRequestDto request) {
+        if (request == null) {
+            request = new SearchRequestDto("");
+        }
+        request.setType("authors");
+        return search(request);
+    }
+
+    public static int calculateTotalPages(long totalCount) {
+        if (totalCount <= 0) {
+            return 0;
+        }
+        if (totalCount <= 5) {
+            return 1;
+        }
+        return 1 + (int) Math.ceil((double) (totalCount - 5) / 10.0);
+    }
+
+    public static int calculateAuthorTotalPages(long totalCount) {
+        if (totalCount <= 0) {
+            return 0;
+        }
+        if (totalCount <= 3) {
+            return 1;
+        }
+        return 1 + (int) Math.ceil((double) (totalCount - 3) / 10.0);
+    }
+
+    private Page<AuthorEntity> searchAuthorsPage(String text, String scriptCode, String normalizedText, long offset, int limit) {
         Specification<AuthorEntity> authorSpec = (root, query, criteriaBuilder) -> {
             query.distinct(true);
             String rawPattern = "%" + text.toLowerCase() + "%";
@@ -118,10 +233,11 @@ public class SearchService {
             return nameMatch;
         };
 
-        Page<AuthorEntity> authorPage = authorRepository.findAll(authorSpec, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "id")));
+        Pageable pageable = new OffsetLimitPageRequest(offset, limit, Sort.by(Sort.Direction.DESC, "id"));
+        Page<AuthorEntity> authorPage = authorRepository.findAll(authorSpec, pageable);
 
         // Fallback: If no script-specific authors found, try broad search
-        if (!authorPage.hasContent() && !"unknown".equalsIgnoreCase(scriptCode)) {
+        if (!authorPage.hasContent() && offset == 0 && !"unknown".equalsIgnoreCase(scriptCode)) {
             Specification<AuthorEntity> fallbackSpec = (root, query, criteriaBuilder) -> {
                 query.distinct(true);
                 String normPattern = "%" + normalizedText + "%";
@@ -129,29 +245,42 @@ public class SearchService {
                 var unaccentName = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(detailJoin.get("name")));
                 return criteriaBuilder.like(unaccentName, normPattern);
             };
-            authorPage = authorRepository.findAll(fallbackSpec, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "id")));
+            authorPage = authorRepository.findAll(fallbackSpec, pageable);
         }
 
-        return authorPage.getContent().stream()
-                .map(authorService::mapToAuthorDto)
-                .collect(Collectors.toList());
+        return authorPage;
     }
 
-    private List<GenreSearchResultDto> searchContentsByGenre(String text, String scriptCode, String normalizedText, int limitPerGenre) {
+    private List<GenreSearchResultDto> searchContentsByGenre(
+            String text, String scriptCode, String normalizedText,
+            Long targetGenreId, int page, long offset, int limit) {
+
         List<GenreSearchResultDto> results = new ArrayList<>();
-        List<GenreEntity> genres = genreRepository.findAll();
+        List<GenreEntity> genres;
+
+        if (targetGenreId != null) {
+            genres = genreRepository.findById(targetGenreId).map(List::of).orElse(List.of());
+        } else {
+            genres = genreRepository.findAll();
+        }
+
+        Pageable pageable = new OffsetLimitPageRequest(offset, limit, Sort.by(Sort.Direction.DESC, "id"));
 
         for (GenreEntity genre : genres) {
             Specification<ContentEntity> spec = buildContentGenreSpec(genre.getId(), text, scriptCode, normalizedText);
-            Page<ContentEntity> page = contentRepository.findAll(spec, PageRequest.of(0, limitPerGenre, Sort.by(Sort.Direction.DESC, "id")));
+            Page<ContentEntity> contentPage = contentRepository.findAll(spec, pageable);
 
-            if (page.hasContent()) {
+            if (contentPage.hasContent() || targetGenreId != null) {
                 GenreSearchResultDto group = new GenreSearchResultDto();
                 group.setGenreId(genre.getId());
                 group.setGenreName(genre.getName());
                 group.setGenreSlug(genre.getSlug());
-                group.setTotalCount(page.getTotalElements());
-                group.setContents(page.getContent().stream()
+                group.setTotalCount(contentPage.getTotalElements());
+                group.setPage(page);
+                group.setPageSize(limit);
+                group.setTotalPages(calculateTotalPages(contentPage.getTotalElements()));
+                group.setHasMore((offset + contentPage.getContent().size()) < contentPage.getTotalElements());
+                group.setContents(contentPage.getContent().stream()
                         .map(contentService::mapToContentDto)
                         .collect(Collectors.toList()));
                 results.add(group);
@@ -188,7 +317,6 @@ public class SearchService {
             } else if ("en".equalsIgnoreCase(scriptCode)) {
                 // Optimized: search in English script content_texts or unaccented title
                 var unaccentTextTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(textJoin.get("title")));
-                var unaccentContentTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(root.get("title")));
 
                 titleMatch = criteriaBuilder.or(
                         criteriaBuilder.and(
@@ -199,18 +327,14 @@ public class SearchService {
                                 )
                         ),
                         criteriaBuilder.like(unaccentTextTitle, normPattern),
-                        criteriaBuilder.like(unaccentContentTitle, normPattern),
-                        criteriaBuilder.like(criteriaBuilder.lower(root.get("title")), rawPattern)
+                        criteriaBuilder.like(criteriaBuilder.lower(textJoin.get("title")), rawPattern)
                 );
             } else {
                 var unaccentTextTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(textJoin.get("title")));
-                var unaccentContentTitle = criteriaBuilder.function("unaccent", String.class, criteriaBuilder.lower(root.get("title")));
 
                 titleMatch = criteriaBuilder.or(
                         criteriaBuilder.like(criteriaBuilder.lower(textJoin.get("title")), rawPattern),
-                        criteriaBuilder.like(unaccentTextTitle, normPattern),
-                        criteriaBuilder.like(criteriaBuilder.lower(root.get("title")), rawPattern),
-                        criteriaBuilder.like(unaccentContentTitle, normPattern)
+                        criteriaBuilder.like(unaccentTextTitle, normPattern)
                 );
             }
 

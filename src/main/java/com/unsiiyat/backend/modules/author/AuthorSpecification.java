@@ -13,10 +13,20 @@ public class AuthorSpecification {
 
     public static Specification<AuthorEntity> filter(AuthorFilterRequest filterRequest) {
         return new SpecificationBuilder<AuthorEntity>()
+                .with(idEqual(filterRequest.getId()))
                 .with(birthDateEqual(filterRequest.getBirthDate()))
                 .with(deathDateEqual(filterRequest.getDeathDate()))
                 .with(searchLike(filterRequest.getSearch()))
                 .build();
+    }
+
+    public static Specification<AuthorEntity> idEqual(Long id) {
+        return (root, query, criteriaBuilder) -> {
+            if (id == null) {
+                return null;
+            }
+            return criteriaBuilder.equal(root.get("id"), id);
+        };
     }
 
     public static Specification<AuthorEntity> birthDateEqual(LocalDate birthDate) {

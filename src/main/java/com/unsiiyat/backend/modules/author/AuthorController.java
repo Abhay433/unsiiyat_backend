@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,6 +37,16 @@ public class AuthorController {
         LOGGER.debug("addOrUpdateAuthor endpoint called");
         AuthorDto response = authorService.addOrUpdateAuthor(request);
         return ResponseEntity.ok(ApiResponse.success("Author saved successfully", response));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PostMapping(value = "/{id}/photo", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<String>> uploadAuthorPhoto(
+            @PathVariable("id") Long id,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        LOGGER.debug("uploadAuthorPhoto endpoint called for id: {}", id);
+        String photoUrl = authorService.updateAuthorPhoto(id, file);
+        return ResponseEntity.ok(ApiResponse.success("Author photo updated successfully", photoUrl));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")

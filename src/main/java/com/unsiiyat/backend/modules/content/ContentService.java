@@ -24,6 +24,8 @@ import com.unsiiyat.backend.modules.contextText.ContentTextRepository;
 import com.unsiiyat.backend.modules.genre.GenreEntity;
 import com.unsiiyat.backend.modules.genre.GenreRepository;
 import com.unsiiyat.backend.modules.genre.GenreService;
+import com.unsiiyat.backend.modules.script.ScriptEntity;
+import com.unsiiyat.backend.modules.script.ScriptRepository;
 import com.unsiiyat.backend.modules.theme.ThemeEntity;
 import com.unsiiyat.backend.modules.theme.ThemeRepository;
 
@@ -53,6 +55,9 @@ public class ContentService {
     @Autowired
     private ContentTextRepository contentTextRepository;
 
+    @Autowired
+    private ScriptRepository scriptRepository;
+
     @Transactional
     public PagedResponse<ContentDto> filterContent(ContentFilterRequest request) {
 
@@ -62,7 +67,8 @@ public class ContentService {
         Page<ContentEntity> page = contentRepository
                 .findAll(ContentSpecification.filter(request), pageable);
 
-        List<ContentDto> dtoList = page.getContent().stream().map(this::mapToContentDto)
+        List<ContentDto> dtoList = page.getContent().stream()
+                .map(content -> this.mapToContentDto(content, request.getScriptId()))
                 .collect(Collectors.toList());
 
         Page<ContentDto> dtoPage = new PageImpl<>(dtoList, page.getPageable(), page.getTotalElements());
@@ -77,7 +83,84 @@ public class ContentService {
         } else {
             saved = createContent(request);
         }
+
+        // Save or update all incoming content texts within the same transaction
+        saveOrUpdateContentTexts(saved, request);
+
         return mapToContentDto(saved);
+    }
+
+    private void saveOrUpdateContentTexts(ContentEntity content, ContentDto request) {
+        List<ContentTextDto> incomingTexts = new ArrayList<>();
+        if (request.getContentTexts() != null && !request.getContentTexts().isEmpty()) {
+            incomingTexts.addAll(request.getContentTexts());
+        } else if (request.getPrimaryText() != null) {
+            incomingTexts.add(request.getPrimaryText());
+        }
+
+        for (ContentTextDto textDto : incomingTexts) {
+            // Strictly only save texts where actual body content is provided
+            if (textDto == null || textDto.getBody() == null || textDto.getBody().trim().isEmpty()) {
+                continue;
+            }
+
+            ScriptEntity script = resolveScript(textDto.getScriptId(), textDto.getTitle(), textDto.getBody());
+            if (script == null) {
+                continue;
+            }
+
+            String textTitle = (textDto.getTitle() != null && !textDto.getTitle().trim().isEmpty())
+                    ? textDto.getTitle().trim()
+                    : (request.getTitle() != null ? request.getTitle().trim() : "");
+
+            String textBody = textDto.getBody().trim();
+
+            // Look up existing content text for this (content_id, script_id) to avoid
+            // duplicate key violations
+            java.util.Optional<ContentTextEntity> existingOpt = contentTextRepository
+                    .findByContentIdAndScriptId(content.getId(), script.getId());
+            ContentTextEntity entity;
+            if (existingOpt.isPresent()) {
+                entity = existingOpt.get();
+            } else if (textDto.getId() != null) {
+                entity = contentTextRepository.findById(textDto.getId()).orElseGet(ContentTextEntity::new);
+            } else {
+                entity = new ContentTextEntity();
+            }
+
+            entity.setContent(content);
+            entity.setScript(script);
+            entity.setTitle(textTitle);
+            entity.setBody(textBody);
+
+            contentTextRepository.save(entity);
+        }
+    }
+
+    private ScriptEntity resolveScript(Long scriptId, String title, String body) {
+        if (scriptId != null) {
+            return scriptRepository.findById(scriptId)
+                    .orElseGet(() -> {
+                        String defaultCode = scriptId == 1L ? "ur"
+                                : (scriptId == 2L ? "hi" : (scriptId == 3L ? "en" : null));
+                        String defaultName = scriptId == 1L ? "Urdu"
+                                : (scriptId == 2L ? "Hindi" : (scriptId == 3L ? "English" : null));
+                        if (defaultCode != null) {
+                            return scriptRepository.findByCode(defaultCode)
+                                    .orElseGet(() -> scriptRepository.save(new ScriptEntity(defaultCode, defaultName,
+                                            java.time.LocalDateTime.now(), java.time.LocalDateTime.now())));
+                        }
+                        return null;
+                    });
+        }
+
+        // Fallback: detect language from text if scriptId was not provided
+        String detectedCode = com.unsiiyat.backend.common.util.LanguageDetectorUtil
+                .detectLanguageCode((title != null ? title : "") + " " + (body != null ? body : ""));
+        if (detectedCode != null && !"unknown".equalsIgnoreCase(detectedCode)) {
+            return scriptRepository.findByCode(detectedCode).orElse(null);
+        }
+        return null;
     }
 
     @Transactional
@@ -85,15 +168,16 @@ public class ContentService {
         ContentEntity entity = new ContentEntity();
         if (request.getGenreId() != null) {
             GenreEntity genre = genreRepository.findById(request.getGenreId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Genre not found with id: " + request.getGenreId()));
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("Genre not found with id: " + request.getGenreId()));
             entity.setGenre(genre);
         }
         if (request.getAuthorId() != null) {
             AuthorEntity author = authorRepository.findById(request.getAuthorId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Author not found with id: " + request.getAuthorId()));
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("Author not found with id: " + request.getAuthorId()));
             entity.setAuthor(author);
         }
-        entity.setTitle(request.getTitle());
 
         if (request.getThemeIds() != null && !request.getThemeIds().isEmpty()) {
             Set<ThemeEntity> themes = request.getThemeIds().stream()
@@ -113,15 +197,16 @@ public class ContentService {
 
         if (request.getGenreId() != null) {
             GenreEntity genre = genreRepository.findById(request.getGenreId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Genre not found with id: " + request.getGenreId()));
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("Genre not found with id: " + request.getGenreId()));
             entity.setGenre(genre);
         }
         if (request.getAuthorId() != null) {
             AuthorEntity author = authorRepository.findById(request.getAuthorId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Author not found with id: " + request.getAuthorId()));
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("Author not found with id: " + request.getAuthorId()));
             entity.setAuthor(author);
         }
-        entity.setTitle(request.getTitle());
 
         if (request.getThemeIds() != null) {
             Set<ThemeEntity> themes = request.getThemeIds().stream()
@@ -142,6 +227,10 @@ public class ContentService {
     }
 
     public ContentDto mapToContentDto(ContentEntity entity) {
+        return mapToContentDto(entity, null);
+    }
+
+    public ContentDto mapToContentDto(ContentEntity entity, Long preferredScriptId) {
         if (entity == null) {
             return null;
         }
@@ -153,35 +242,38 @@ public class ContentService {
         }
         if (entity.getAuthor() != null) {
             dto.setAuthorId(entity.getAuthor().getId());
-            dto.setAuthor(authorService.mapToAuthorDto(entity.getAuthor()));
+            dto.setAuthor(authorService.mapToAuthorDto(entity.getAuthor(), preferredScriptId));
         }
-        dto.setTitle(entity.getTitle());
         if (entity.getThemes() != null) {
             dto.setThemeIds(entity.getThemes().stream().map(ThemeEntity::getId).collect(Collectors.toSet()));
         }
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
 
-        List<ContentTextEntity> textEntities = entity.getContentTexts();
-        if (textEntities == null || textEntities.isEmpty()) {
-            textEntities = contentTextRepository.findByContentId(entity.getId());
-        }
-
+        List<ContentTextEntity> textEntities = contentTextRepository.findByContentId(entity.getId());
         if (textEntities != null && !textEntities.isEmpty()) {
             List<ContentTextDto> textDtos = new ArrayList<>();
+            ContentTextDto preferredText = null;
             for (ContentTextEntity t : textEntities) {
                 ContentTextDto tDto = new ContentTextDto();
                 tDto.setId(t.getId());
                 tDto.setContentId(entity.getId());
                 if (t.getScript() != null) {
                     tDto.setScriptId(t.getScript().getId());
+                    if (preferredScriptId != null && t.getScript().getId().equals(preferredScriptId)) {
+                        preferredText = tDto;
+                    }
                 }
                 tDto.setTitle(t.getTitle());
                 tDto.setBody(t.getBody());
                 textDtos.add(tDto);
             }
             dto.setContentTexts(textDtos);
-            dto.setPrimaryText(textDtos.get(0));
+            ContentTextDto primary = preferredText != null ? preferredText : textDtos.get(0);
+            dto.setPrimaryText(primary);
+            if (primary != null) {
+                dto.setTitle(primary.getTitle());
+            }
         }
 
         return dto;

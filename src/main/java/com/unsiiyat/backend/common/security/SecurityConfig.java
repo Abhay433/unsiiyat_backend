@@ -49,29 +49,39 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setContentType("application/json");
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            response.getWriter().write("{\"success\":false,\"status\":401,\"error\":\"UNAUTHORIZED\",\"message\":\"Unauthorized: " 
-                                    + authException.getMessage() + "\",\"path\":\"" + request.getRequestURI() + "\"}");
+                            response.getWriter().write(
+                                    "{\"success\":false,\"status\":401,\"error\":\"UNAUTHORIZED\",\"message\":\"Unauthorized: "
+                                            + authException.getMessage() + "\",\"path\":\"" + request.getRequestURI()
+                                            + "\"}");
                         })
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setContentType("application/json");
                             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                            response.getWriter().write("{\"success\":false,\"status\":403,\"error\":\"FORBIDDEN\",\"message\":\"Forbidden: Access denied.\",\"path\":\"" 
-                                    + request.getRequestURI() + "\"}");
-                        })
-                )
+                            response.getWriter().write(
+                                    "{\"success\":false,\"status\":403,\"error\":\"FORBIDDEN\",\"message\":\"Forbidden: Access denied.\",\"path\":\""
+                                            + request.getRequestURI() + "\"}");
+                        }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/auth/login",
                                 "/api/auth/login",
                                 "/api/v1/auth/login",
                                 "/api/search/**",
+                                "/api/home/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
-                                "/swagger-ui.html"
+                                "/swagger-ui.html",
+                                "/api/contents/list",
+                                "/api/author-details/list",
+                                "/api/authors/list",
+                                "/api/genres/list",
+                                "/api/themes/list",
+                                "/api/scripts/list",
+                                "/api/scripts"
+
                         ).permitAll()
                         .requestMatchers("/api/admin/**", "/api/v1/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .anyRequest().authenticated()
-                )
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -82,7 +92,8 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
+        config.setAllowedHeaders(
+                Arrays.asList("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
         config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);

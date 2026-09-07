@@ -25,6 +25,9 @@ public class AuthorEntity {
     @Column(name = "death_date")
     private LocalDate deathDate;
 
+    @Column(name = "avatar_url", length = 1000)
+    private String avatarUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -78,6 +81,14 @@ public class AuthorEntity {
 
     public void setDeathDate(LocalDate deathDate) {
         this.deathDate = deathDate;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public LocalDateTime getCreatedAt() {

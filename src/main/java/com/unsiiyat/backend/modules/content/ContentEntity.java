@@ -31,9 +31,6 @@ public class ContentEntity {
     @JoinColumn(name = "author_id")
     private AuthorEntity author;
 
-    @Column(name = "title", nullable = false, length = 500)
-    private String title;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -58,17 +55,17 @@ public class ContentEntity {
     public ContentEntity() {
     }
 
-    public ContentEntity(GenreEntity genre, AuthorEntity author, String title) {
+    public ContentEntity(GenreEntity genre, AuthorEntity author) {
         this.genre = genre;
         this.author = author;
-        this.title = title;
+
     }
 
-    public ContentEntity(Long id, GenreEntity genre, AuthorEntity author, String title) {
+    public ContentEntity(Long id, GenreEntity genre, AuthorEntity author) {
         this.id = id;
         this.genre = genre;
         this.author = author;
-        this.title = title;
+
     }
 
     public Long getId() {
@@ -93,14 +90,6 @@ public class ContentEntity {
 
     public void setAuthor(AuthorEntity author) {
         this.author = author;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -4,12 +4,23 @@ import com.unsiiyat.backend.common.filters.BaseFilterRequest;
 
 public class ContentFilterRequest extends BaseFilterRequest {
 
+    private Long id;
     private Long genreId;
     private Long authorId;
     private String title;
     private Long themeId;
     private String search;
     private String authorName;
+    private Long scriptId;
+    private String scriptCode;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
 
     public Long getGenreId() {
         return genreId;
@@ -57,6 +68,22 @@ public class ContentFilterRequest extends BaseFilterRequest {
 
     public void setAuthorName(String authorName) {
         this.authorName = authorName;
+    }
+
+    public Long getScriptId() {
+        return scriptId;
+    }
+
+    public void setScriptId(Long scriptId) {
+        this.scriptId = scriptId;
+    }
+
+    public String getScriptCode() {
+        return scriptCode;
+    }
+
+    public void setScriptCode(String scriptCode) {
+        this.scriptCode = scriptCode;
     }
 
     @Override
