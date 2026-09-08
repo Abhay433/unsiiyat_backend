@@ -41,11 +41,14 @@ public class HomeService {
 
     /**
      * Returns the Ghazal of the Day.
-     * The Ghazal is selected deterministically based on the current calendar date (Asia/Kolkata),
-     * ensuring it remains consistent throughout the day for all users and changes automatically daily.
+     * The Ghazal is selected deterministically based on the current calendar date
+     * (Asia/Kolkata),
+     * ensuring it remains consistent throughout the day for all users and changes
+     * automatically daily.
      *
      * @param preferredScriptId Optional preferred script ID (Urdu, Hindi, English)
-     * @param forceRandom If true, picks a fresh random Ghazal instead of the daily fixed one
+     * @param forceRandom       If true, picks a fresh random Ghazal instead of the
+     *                          daily fixed one
      * @return ContentDto representing the chosen Ghazal
      */
     @Transactional(readOnly = true)
@@ -61,7 +64,8 @@ public class HomeService {
 
         // Fallback: if no contents found with Ghazal genre, pick from all contents
         if (contentIds == null || contentIds.isEmpty()) {
-            LOGGER.warn("No contents found for Ghazal genre ID {}, falling back to all available content IDs", ghazalGenreId);
+            LOGGER.warn("No contents found for Ghazal genre ID {}, falling back to all available content IDs",
+                    ghazalGenreId);
             contentIds = contentRepository.findAllIds();
         }
 
@@ -75,7 +79,8 @@ public class HomeService {
         if (forceRandom) {
             chosenIndex = ThreadLocalRandom.current().nextInt(contentIds.size());
         } else {
-            // Seed with today's epoch day so the chosen ghazal is stable for the entire day and changes daily
+            // Seed with today's epoch day so the chosen ghazal is stable for the entire day
+            // and changes daily
             long epochDay = LocalDate.now(ZoneId.of("Asia/Kolkata")).toEpochDay();
             Random dailyRandom = new Random(epochDay);
             chosenIndex = dailyRandom.nextInt(contentIds.size());
@@ -92,7 +97,8 @@ public class HomeService {
     }
 
     /**
-     * Resolves the Ghazal Genre ID dynamically by checking slug, name, and multilingual variations.
+     * Resolves the Ghazal Genre ID dynamically by checking slug, name, and
+     * multilingual variations.
      */
     public Long resolveGhazalGenreId() {
         // Check by exact slug "ghazal"
@@ -121,10 +127,38 @@ public class HomeService {
         return allGenres.isEmpty() ? null : allGenres.get(0).getId();
     }
 
+    public Long resolveNazmGenreId() {
+        // Check by exact slug "nazm"
+        Optional<GenreEntity> bySlug = genreRepository.findBySlug("nazm");
+        if (bySlug.isPresent()) {
+            return bySlug.get().getId();
+        }
+
+        // Check by name "Nazm"
+        Optional<GenreEntity> byName = genreRepository.findByName("Nazm");
+        if (byName.isPresent()) {
+            return byName.get().getId();
+        }
+
+        // Check across all genres for variations
+        List<GenreEntity> allGenres = genreRepository.findAll();
+        for (GenreEntity g : allGenres) {
+            String slug = g.getSlug() != null ? g.getSlug().toLowerCase() : "";
+            String name = g.getName() != null ? g.getName().toLowerCase() : "";
+            if ("nazm".equals(slug) || name.contains("nazm") || name.contains("نظم") || name.contains("नज़्म")) {
+                return g.getId();
+            }
+        }
+
+        // Fallback to first available genre if present
+        return allGenres.isEmpty() ? null : allGenres.get(0).getId();
+    }
+
     public static final int PER_GENRE_LIMIT = 8;
 
     /**
-     * Returns curated / selected contents grouped by genre using default limit of 8.
+     * Returns curated / selected contents grouped by genre using default limit of
+     * 8.
      *
      * @param preferredScriptId Optional script ID to format primary text
      * @return List of GenreCuratedGroupDto
@@ -139,7 +173,7 @@ public class HomeService {
      * For each genre, up to 'limit' (default 8) contents are returned,
      * prioritizing is_selected = true items.
      *
-     * @param limit Maximum number of contents per genre (default: 8)
+     * @param limit             Maximum number of contents per genre (default: 8)
      * @param preferredScriptId Optional script ID to format primary text
      * @return List of GenreCuratedGroupDto
      */
@@ -190,10 +224,15 @@ public class HomeService {
         return getSelectedGhazals(PER_GENRE_LIMIT, preferredScriptId);
     }
 
+    @Transactional(readOnly = true)
+    public List<ContentDto> getSelectedNazms(Long preferredScriptId) {
+        return getSelectedNazms(PER_GENRE_LIMIT, preferredScriptId);
+    }
+
     /**
      * Returns selected / curated Ghazals up to 'limit' (default 8).
      *
-     * @param limit Maximum number of Ghazals to return (default: 8)
+     * @param limit             Maximum number of Ghazals to return (default: 8)
      * @param preferredScriptId Optional script ID to format primary text
      * @return List of ContentDto
      */
@@ -201,6 +240,33 @@ public class HomeService {
     public List<ContentDto> getSelectedGhazals(Integer limit, Long preferredScriptId) {
         int contentLimit = (limit != null && limit > 0) ? limit : 8;
         Long ghazalGenreId = resolveGhazalGenreId();
+        if (ghazalGenreId == null) {
+            return List.of();
+        }
+
+        Pageable pageable = PageRequest.of(0, contentLimit, Sort.by(Sort.Direction.DESC, "id"));
+
+        // 1. Fetch curated (is_selected = true) Ghazals
+        List<ContentEntity> entities = contentRepository.findByGenreIdAndIsSelectedTrue(ghazalGenreId, pageable);
+
+        // 2. Fallback to latest Ghazals if no is_selected items exist yet
+        if (entities == null || entities.isEmpty()) {
+            entities = contentRepository.findByGenreId(ghazalGenreId, pageable);
+        }
+
+        if (entities == null || entities.isEmpty()) {
+            return List.of();
+        }
+
+        return entities.stream()
+                .map(entity -> contentService.mapToContentDto(entity, preferredScriptId))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContentDto> getSelectedNazms(Integer limit, Long preferredScriptId) {
+        int contentLimit = (limit != null && limit > 0) ? limit : 8;
+        Long ghazalGenreId = resolveNazmGenreId();
         if (ghazalGenreId == null) {
             return List.of();
         }

@@ -27,8 +27,10 @@ public class HomeController {
      * Endpoint to fetch the Ghazal of the Day.
      * Accessible via both /ghazal-of-the-day and /gazal-of-the-day.
      *
-     * @param scriptId Optional script ID (Urdu=1, Hindi=2, English=3) to format primary text
-     * @param random Optional flag; if true, returns a fresh random Ghazal instead of the daily fixed one
+     * @param scriptId Optional script ID (Urdu=1, Hindi=2, English=3) to format
+     *                 primary text
+     * @param random   Optional flag; if true, returns a fresh random Ghazal instead
+     *                 of the daily fixed one
      */
     @GetMapping(path = { "/ghazal-of-the-day", "/gazal-of-the-day" })
     public ResponseEntity<ApiResponse<ContentDto>> getGhazalOfTheDay(
@@ -85,5 +87,13 @@ public class HomeController {
         LOGGER.debug("GET /api/home/selected-ghazals called (scriptId={})", scriptId);
         List<ContentDto> ghazals = homeService.getSelectedGhazals(scriptId);
         return ResponseEntity.ok(ApiResponse.success("Selected Ghazals fetched successfully", ghazals));
+    }
+
+    @GetMapping(path = { "/selected-nazm", "/curated-nazm" })
+    public ResponseEntity<ApiResponse<List<ContentDto>>> getSelectedNazms(
+            @RequestParam(value = "scriptId", required = false) Long scriptId) {
+        LOGGER.debug("GET /api/home/selected-nazm called (scriptId={})", scriptId);
+        List<ContentDto> nazms = homeService.getSelectedNazms(scriptId);
+        return ResponseEntity.ok(ApiResponse.success("Selected Nazms fetched successfully", nazms));
     }
 }
