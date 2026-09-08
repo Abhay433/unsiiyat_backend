@@ -45,4 +45,10 @@ public class ContentController {
         return ResponseEntity.ok(ApiResponse.success("Content deleted successfully", null));
     }
 
+    @org.springframework.web.bind.annotation.GetMapping("/count-selected")
+    public ResponseEntity<ApiResponse<Long>> countSelectedByGenre(
+            @org.springframework.web.bind.annotation.RequestParam("genreId") Long genreId) {
+        long count = contentService.countSelectedByGenre(genreId);
+        return ResponseEntity.ok(ApiResponse.success("Selected count fetched successfully", count));
+    }
 }

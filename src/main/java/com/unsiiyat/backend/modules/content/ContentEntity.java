@@ -46,10 +46,16 @@ public class ContentEntity {
     @JoinTable(name = "content_themes", joinColumns = @JoinColumn(name = "content_id", referencedColumnName = "id"), inverseJoinColumns = @JoinColumn(name = "theme_id", referencedColumnName = "id"))
     private Set<ThemeEntity> themes = new HashSet<>();
 
+    @Column(name = "is_selected", nullable = false)
+    private Boolean isSelected = false;
+
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        if (this.isSelected == null) {
+            this.isSelected = false;
+        }
     }
 
     public ContentEntity() {
@@ -140,5 +146,13 @@ public class ContentEntity {
 
     public void removeTheme(ThemeEntity theme) {
         this.themes.remove(theme);
+    }
+
+    public Boolean getIsSelected() {
+        return isSelected;
+    }
+
+    public void setIsSelected(Boolean isSelected) {
+        this.isSelected = isSelected;
     }
 }

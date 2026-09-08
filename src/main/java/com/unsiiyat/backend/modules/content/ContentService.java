@@ -2,8 +2,11 @@ package com.unsiiyat.backend.modules.content;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import jakarta.validation.ValidationException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -187,6 +190,13 @@ public class ContentService {
             entity.setThemes(themes);
         }
 
+        if (request.getIsSelected() != null && Boolean.TRUE.equals(request.getIsSelected())) {
+            validateSelectedLimit(request.getGenreId(), null);
+            entity.setIsSelected(true);
+        } else {
+            entity.setIsSelected(false);
+        }
+
         return contentRepository.save(entity);
     }
 
@@ -216,7 +226,41 @@ public class ContentService {
             entity.setThemes(themes);
         }
 
+        if (request.getIsSelected() != null) {
+            if (Boolean.TRUE.equals(request.getIsSelected())) {
+                Long targetGenreId = (request.getGenreId() != null) ? request.getGenreId()
+                        : (entity.getGenre() != null ? entity.getGenre().getId() : null);
+                validateSelectedLimit(targetGenreId, entity.getId());
+            }
+            entity.setIsSelected(request.getIsSelected());
+        }
+
         return contentRepository.save(entity);
+    }
+
+    public long countSelectedByGenre(Long genreId) {
+        if (genreId == null) {
+            return 0L;
+        }
+        return contentRepository.countByGenreIdAndIsSelectedTrue(genreId);
+    }
+
+    private void validateSelectedLimit(Long genreId, Long currentContentId) {
+        if (genreId == null) {
+            return;
+        }
+        long count = contentRepository.countByGenreIdAndIsSelectedTrue(genreId);
+        if (currentContentId != null) {
+            Optional<ContentEntity> existingOpt = contentRepository.findById(currentContentId);
+            if (existingOpt.isPresent() && Boolean.TRUE.equals(existingOpt.get().getIsSelected())
+                    && existingOpt.get().getGenre() != null
+                    && genreId.equals(existingOpt.get().getGenre().getId())) {
+                return; // Already selected in this genre, count doesn't increase
+            }
+        }
+        if (count >= 8) {
+            throw new ValidationException("Cannot select more than 8 contents for this genre.");
+        }
     }
 
     @Transactional
@@ -247,6 +291,7 @@ public class ContentService {
         if (entity.getThemes() != null) {
             dto.setThemeIds(entity.getThemes().stream().map(ThemeEntity::getId).collect(Collectors.toSet()));
         }
+        dto.setIsSelected(entity.getIsSelected() != null ? entity.getIsSelected() : false);
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setUpdatedAt(entity.getUpdatedAt());
 

@@ -13,6 +13,7 @@ public class ContentFilterRequest extends BaseFilterRequest {
     private String authorName;
     private Long scriptId;
     private String scriptCode;
+    private Boolean isSelected;
 
     public Long getId() {
         return id;
@@ -84,6 +85,14 @@ public class ContentFilterRequest extends BaseFilterRequest {
 
     public void setScriptCode(String scriptCode) {
         this.scriptCode = scriptCode;
+    }
+
+    public Boolean getIsSelected() {
+        return isSelected;
+    }
+
+    public void setIsSelected(Boolean isSelected) {
+        this.isSelected = isSelected;
     }
 
     @Override

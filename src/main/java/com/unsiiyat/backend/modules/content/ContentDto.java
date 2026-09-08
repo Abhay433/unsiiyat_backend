@@ -22,6 +22,7 @@ public class ContentDto {
     private ContentTextDto primaryText;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean isSelected = false;
 
     public ContentDto() {
     }
@@ -120,5 +121,13 @@ public class ContentDto {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Boolean getIsSelected() {
+        return isSelected;
+    }
+
+    public void setIsSelected(Boolean isSelected) {
+        this.isSelected = isSelected;
     }
 }

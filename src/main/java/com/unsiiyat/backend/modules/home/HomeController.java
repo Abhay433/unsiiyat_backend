@@ -1,5 +1,7 @@
 package com.unsiiyat.backend.modules.home;
 
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,5 +58,32 @@ public class HomeController {
         }
 
         return ResponseEntity.ok(ApiResponse.success("Random Ghazal fetched successfully", ghazal));
+    }
+
+    /**
+     * Endpoint to fetch curated / selected contents grouped by genre.
+     * Fixed limit of 8 contents per genre.
+     *
+     * @param scriptId Optional script ID to format primary text
+     */
+    @GetMapping("/curated-genres")
+    public ResponseEntity<ApiResponse<List<GenreCuratedGroupDto>>> getCuratedGenres(
+            @RequestParam(value = "scriptId", required = false) Long scriptId) {
+        LOGGER.debug("GET /api/home/curated-genres called (scriptId={})", scriptId);
+        List<GenreCuratedGroupDto> groups = homeService.getCuratedContentsByGenre(scriptId);
+        return ResponseEntity.ok(ApiResponse.success("Curated genres fetched successfully", groups));
+    }
+
+    /**
+     * Endpoint to fetch Selected / Curated Ghazals (fixed limit of 8 per genre).
+     *
+     * @param scriptId Optional script ID to format primary text
+     */
+    @GetMapping(path = { "/selected-ghazals", "/curated-ghazals" })
+    public ResponseEntity<ApiResponse<List<ContentDto>>> getSelectedGhazals(
+            @RequestParam(value = "scriptId", required = false) Long scriptId) {
+        LOGGER.debug("GET /api/home/selected-ghazals called (scriptId={})", scriptId);
+        List<ContentDto> ghazals = homeService.getSelectedGhazals(scriptId);
+        return ResponseEntity.ok(ApiResponse.success("Selected Ghazals fetched successfully", ghazals));
     }
 }

@@ -20,6 +20,7 @@ public class ContentSpecification {
                 .with(searchLike(filterRequest.getSearch()))
                 .with(scriptIdEqual(filterRequest.getScriptId()))
                 .with(scriptCodeEqual(filterRequest.getScriptCode()))
+                .with(isSelectedEqual(filterRequest.getIsSelected()))
                 .build();
     }
 
@@ -168,6 +169,15 @@ public class ContentSpecification {
                     criteriaBuilder.like(criteriaBuilder.lower(authorDetailJoin.get("name")), rawPattern),
                     criteriaBuilder.like(unaccentAuthorName, normalizedPattern)
             );
+        };
+    }
+
+    public static Specification<ContentEntity> isSelectedEqual(Boolean isSelected) {
+        return (root, query, criteriaBuilder) -> {
+            if (isSelected == null) {
+                return null;
+            }
+            return criteriaBuilder.equal(root.get("isSelected"), isSelected);
         };
     }
 }

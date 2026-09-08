@@ -32,4 +32,14 @@ public class HomeServiceTest {
         assertTrue(idx1 >= 0 && idx1 < mockIds.size());
         assertTrue(idxTomorrow >= 0 && idxTomorrow < mockIds.size());
     }
+
+    @Test
+    void testGenreCuratedGroupDto() {
+        GenreCuratedGroupDto dto = new GenreCuratedGroupDto(1L, "Ghazal", "ghazal", 5L, List.of());
+        assertEquals(1L, dto.getGenreId());
+        assertEquals("Ghazal", dto.getGenreName());
+        assertEquals("ghazal", dto.getGenreSlug());
+        assertEquals(5L, dto.getTotalSelected());
+        assertNotNull(dto.getContents());
+    }
 }
