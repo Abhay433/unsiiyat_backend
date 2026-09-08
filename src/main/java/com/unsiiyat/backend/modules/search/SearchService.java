@@ -1,7 +1,11 @@
 package com.unsiiyat.backend.modules.search;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +26,8 @@ import com.unsiiyat.backend.modules.author.AuthorService;
 import com.unsiiyat.backend.modules.content.ContentEntity;
 import com.unsiiyat.backend.modules.content.ContentRepository;
 import com.unsiiyat.backend.modules.content.ContentService;
+import com.unsiiyat.backend.modules.contextText.ContentTextEntity;
+import com.unsiiyat.backend.modules.contextText.ContentTextRepository;
 import com.unsiiyat.backend.modules.genre.GenreEntity;
 import com.unsiiyat.backend.modules.genre.GenreRepository;
 
@@ -42,6 +48,9 @@ public class SearchService {
 
     @Autowired
     private ContentService contentService;
+
+    @Autowired
+    private ContentTextRepository contentTextRepository;
 
     @Autowired
     private GenreRepository genreRepository;
@@ -339,6 +348,381 @@ public class SearchService {
             }
 
             return criteriaBuilder.and(genrePredicate, titleMatch);
+        };
+    }
+
+    public Long resolveGhazalGenreId() {
+        Optional<GenreEntity> bySlug = genreRepository.findBySlug("ghazal");
+        if (bySlug.isPresent()) {
+            return bySlug.get().getId();
+        }
+
+        Optional<GenreEntity> byName = genreRepository.findByName("Ghazal");
+        if (byName.isPresent()) {
+            return byName.get().getId();
+        }
+
+        List<GenreEntity> allGenres = genreRepository.findAll();
+        for (GenreEntity g : allGenres) {
+            String slug = g.getSlug() != null ? g.getSlug().toLowerCase() : "";
+            String name = g.getName() != null ? g.getName().toLowerCase() : "";
+            if ("ghazal".equals(slug) || name.contains("ghazal") || name.contains("غزل") || name.contains("ग़ज़ल")) {
+                return g.getId();
+            }
+        }
+
+        return allGenres.isEmpty() ? null : allGenres.get(0).getId();
+    }
+
+    public static class ExtractedCouplet {
+        private final int index; // 1-based index (e.g. 1st sher, 2nd sher)
+        private final List<String> lines;
+        private final String text;
+
+        public ExtractedCouplet(int index, List<String> lines) {
+            this.index = index;
+            this.lines = lines != null ? lines : List.of();
+            this.text = String.join("\n", this.lines);
+        }
+
+        public int getIndex() {
+            return index;
+        }
+
+        public List<String> getLines() {
+            return lines;
+        }
+
+        public String getText() {
+            return text;
+        }
+    }
+
+    public static List<ExtractedCouplet> extractCouplets(String body) {
+        if (body == null || body.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        String cleanBody = body.replace("\r\n", "\n").replace("\r", "\n")
+                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?i)</p>", "\n\n")
+                .replaceAll("<[^>]+>", "");
+
+        String[] rawLines = cleanBody.split("\n");
+        List<String> lines = new ArrayList<>();
+        for (String l : rawLines) {
+            String trimmed = l.trim();
+            if (!trimmed.isEmpty()) {
+                lines.add(trimmed);
+            }
+        }
+
+        List<ExtractedCouplet> couplets = new ArrayList<>();
+
+        // Check if double newlines (stanzas) separate couplets
+        String[] stanzas = cleanBody.split("(?:\\n\\s*){2,}");
+        boolean validStanzaDivision = false;
+        if (stanzas.length > 1) {
+            int stanzasWithAtLeastTwoLines = 0;
+            int nonEmptyStanzas = 0;
+            for (String s : stanzas) {
+                String[] sLines = s.split("\n");
+                int count = 0;
+                for (String sl : sLines) {
+                    if (!sl.trim().isEmpty()) {
+                        count++;
+                    }
+                }
+                if (count > 0) {
+                    nonEmptyStanzas++;
+                    if (count >= 2) {
+                        stanzasWithAtLeastTwoLines++;
+                    }
+                }
+            }
+            if (nonEmptyStanzas > 0 && ((double) stanzasWithAtLeastTwoLines / nonEmptyStanzas >= 0.5)) {
+                validStanzaDivision = true;
+            }
+        }
+
+        if (validStanzaDivision) {
+            int coupletIdx = 1;
+            for (String s : stanzas) {
+                String[] sLines = s.split("\n");
+                List<String> stanzaLines = new ArrayList<>();
+                for (String sl : sLines) {
+                    String t = sl.trim();
+                    if (!t.isEmpty()) {
+                        stanzaLines.add(t);
+                    }
+                }
+                for (int i = 0; i < stanzaLines.size(); i += 2) {
+                    if (i + 1 < stanzaLines.size()) {
+                        couplets.add(new ExtractedCouplet(coupletIdx++, List.of(stanzaLines.get(i), stanzaLines.get(i + 1))));
+                    } else {
+                        couplets.add(new ExtractedCouplet(coupletIdx++, List.of(stanzaLines.get(i))));
+                    }
+                }
+            }
+        } else {
+            int coupletIdx = 1;
+            for (int i = 0; i < lines.size(); i += 2) {
+                if (i + 1 < lines.size()) {
+                    couplets.add(new ExtractedCouplet(coupletIdx++, List.of(lines.get(i), lines.get(i + 1))));
+                } else {
+                    couplets.add(new ExtractedCouplet(coupletIdx++, List.of(lines.get(i))));
+                }
+            }
+        }
+
+        return couplets;
+    }
+
+    private static boolean matchesCouplet(ExtractedCouplet couplet, String cleanText, String normalizedText) {
+        String textToSearch = couplet.getText();
+        if (textToSearch == null) {
+            return false;
+        }
+        String lowerText = textToSearch.toLowerCase();
+        String lowerQuery = cleanText.toLowerCase();
+        if (lowerText.contains(lowerQuery)) {
+            return true;
+        }
+        String normText = LanguageDetectorUtil.normalizeText(textToSearch);
+        return normText.contains(normalizedText);
+    }
+
+    private static String findMatchedLine(ExtractedCouplet couplet, String cleanText, String normalizedText) {
+        String lowerQuery = cleanText.toLowerCase();
+        for (String line : couplet.getLines()) {
+            if (line.toLowerCase().contains(lowerQuery)
+                    || LanguageDetectorUtil.normalizeText(line).contains(normalizedText)) {
+                return line;
+            }
+        }
+        return !couplet.getLines().isEmpty() ? couplet.getLines().get(0) : "";
+    }
+
+    @Transactional(readOnly = true)
+    public CoupletsSearchResponseDto searchCouplets(SearchRequestDto request) {
+        return searchCouplets(request, null);
+    }
+
+    @Transactional(readOnly = true)
+    public CoupletsSearchResponseDto searchCouplets(SearchRequestDto request, Long preferredScriptId) {
+        String text = request != null ? request.getText() : "";
+        if (text == null || text.trim().isEmpty()) {
+            return new CoupletsSearchResponseDto("", "unknown", "Unknown");
+        }
+
+        String cleanText = text.trim();
+        int page = (request != null && request.getPage() != null && request.getPage() >= 0) ? request.getPage() : 0;
+        int limit = (request != null && request.getSize() != null && request.getSize() > 0) ? request.getSize() : 5;
+
+        // 1. Language detection
+        LanguageDetectorUtil.LanguageType langType = LanguageDetectorUtil.detectLanguage(cleanText);
+        String scriptCode = langType.getCode();
+        String scriptName = langType.getDisplayName();
+        String normalizedText = LanguageDetectorUtil.normalizeText(cleanText);
+
+        // 2. Resolve target Genre
+        Long targetGenreId = (request != null && request.getGenreId() != null)
+                ? request.getGenreId()
+                : resolveGhazalGenreId();
+
+        GenreEntity genre = null;
+        if (targetGenreId != null) {
+            genre = genreRepository.findById(targetGenreId).orElse(null);
+        }
+
+        // 3. Query matching ghazals in the target genre
+        Specification<ContentEntity> spec = buildContentGenreBodySpec(targetGenreId, cleanText, scriptCode, normalizedText);
+
+        long offset = (long) page * limit;
+        Pageable pageable = new OffsetLimitPageRequest(offset, limit, Sort.by(Sort.Direction.DESC, "id"));
+        Page<ContentEntity> contentPage = contentRepository.findAll(spec, pageable);
+
+        // Fallback: If no script-specific contents found, try broad search
+        if (!contentPage.hasContent() && !"unknown".equalsIgnoreCase(scriptCode) && page == 0) {
+            Specification<ContentEntity> fallbackSpec = buildContentGenreBodySpec(targetGenreId, cleanText, "unknown", normalizedText);
+            contentPage = contentRepository.findAll(fallbackSpec, pageable);
+        }
+
+        List<CoupletSearchResultDto> coupletResults = new ArrayList<>();
+
+        for (ContentEntity content : contentPage.getContent()) {
+            List<ContentTextEntity> texts = contentTextRepository.findByContentId(content.getId());
+            if (texts == null || texts.isEmpty()) {
+                continue;
+            }
+
+            ContentTextEntity matchingText = null;
+            ExtractedCouplet matchedCouplet = null;
+
+            // Prioritize preferred script or detected script
+            for (ContentTextEntity t : texts) {
+                if (preferredScriptId != null && t.getScript() != null && preferredScriptId.equals(t.getScript().getId())) {
+                    List<ExtractedCouplet> couplets = extractCouplets(t.getBody());
+                    for (ExtractedCouplet c : couplets) {
+                        if (matchesCouplet(c, cleanText, normalizedText)) {
+                            matchingText = t;
+                            matchedCouplet = c;
+                            break;
+                        }
+                    }
+                } else if (t.getScript() != null && scriptCode.equalsIgnoreCase(t.getScript().getCode())) {
+                    List<ExtractedCouplet> couplets = extractCouplets(t.getBody());
+                    for (ExtractedCouplet c : couplets) {
+                        if (matchesCouplet(c, cleanText, normalizedText)) {
+                            matchingText = t;
+                            matchedCouplet = c;
+                            break;
+                        }
+                    }
+                }
+                if (matchedCouplet != null) {
+                    break;
+                }
+            }
+
+            // Fallback: check any script text of this ghazal
+            if (matchedCouplet == null) {
+                for (ContentTextEntity t : texts) {
+                    List<ExtractedCouplet> couplets = extractCouplets(t.getBody());
+                    for (ExtractedCouplet c : couplets) {
+                        if (matchesCouplet(c, cleanText, normalizedText)) {
+                            matchingText = t;
+                            matchedCouplet = c;
+                            break;
+                        }
+                    }
+                    if (matchedCouplet != null) {
+                        break;
+                    }
+                }
+            }
+
+            // Store exactly 1 couplet from this Ghazal
+            if (matchedCouplet != null && matchingText != null) {
+                CoupletSearchResultDto item = new CoupletSearchResultDto();
+                item.setContentId(content.getId());
+                item.setContentTitle(matchingText.getTitle() != null ? matchingText.getTitle() : "");
+                if (content.getGenre() != null) {
+                    item.setGenreId(content.getGenre().getId());
+                    item.setGenreName(content.getGenre().getName());
+                    item.setGenreSlug(content.getGenre().getSlug());
+                }
+                if (content.getAuthor() != null) {
+                    item.setAuthorId(content.getAuthor().getId());
+                    item.setAuthor(authorService.mapToAuthorDto(content.getAuthor(), preferredScriptId));
+                    item.setAuthorName(item.getAuthor() != null ? item.getAuthor().getName() : "");
+                }
+                if (matchingText.getScript() != null) {
+                    item.setScriptId(matchingText.getScript().getId());
+                    item.setScriptCode(matchingText.getScript().getCode());
+                }
+                item.setCoupletIndex(matchedCouplet.getIndex());
+                item.setLines(matchedCouplet.getLines());
+                item.setCoupletText(matchedCouplet.getText());
+                item.setMatchedLine(findMatchedLine(matchedCouplet, cleanText, normalizedText));
+
+                // Populate couplets in other scripts for this sher
+                int targetIndex = matchedCouplet.getIndex();
+                Map<String, String> coupletByScript = new HashMap<>();
+                Map<String, List<String>> linesByScript = new HashMap<>();
+
+                for (ContentTextEntity t : texts) {
+                    if (t.getScript() != null && t.getScript().getCode() != null) {
+                        List<ExtractedCouplet> otherCouplets = extractCouplets(t.getBody());
+                        if (targetIndex >= 1 && targetIndex <= otherCouplets.size()) {
+                            ExtractedCouplet otherC = otherCouplets.get(targetIndex - 1);
+                            coupletByScript.put(t.getScript().getCode(), otherC.getText());
+                            linesByScript.put(t.getScript().getCode(), otherC.getLines());
+                        }
+                    }
+                }
+                item.setCoupletByScript(coupletByScript);
+                item.setLinesByScript(linesByScript);
+
+                coupletResults.add(item);
+            }
+
+            // Stop when we have gathered the requested limit of couplets (default: 5)
+            if (coupletResults.size() >= limit) {
+                break;
+            }
+        }
+
+        long totalCount = contentPage.getTotalElements();
+        int totalPages = totalCount > 0 ? (int) Math.ceil((double) totalCount / limit) : 0;
+        boolean hasMore = (offset + coupletResults.size()) < totalCount;
+
+        return new CoupletsSearchResponseDto(
+                cleanText, scriptCode, scriptName,
+                genre != null ? genre.getId() : targetGenreId,
+                genre != null ? genre.getName() : null,
+                genre != null ? genre.getSlug() : null,
+                totalCount, page, limit, totalPages, hasMore, coupletResults
+        );
+    }
+
+    private Specification<ContentEntity> buildContentGenreBodySpec(Long genreId, String text, String scriptCode, String normalizedText) {
+        return (root, query, criteriaBuilder) -> {
+            query.distinct(true);
+            String rawPattern = "%" + text.toLowerCase() + "%";
+            String normPattern = "%" + normalizedText + "%";
+
+            List<Predicate> predicates = new ArrayList<>();
+            if (genreId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("genre").get("id"), genreId));
+            }
+
+            var textJoin = root.join("contentTexts", JoinType.INNER);
+            var scriptJoin = textJoin.join("script", JoinType.LEFT);
+
+            var lowerBody = criteriaBuilder.lower(textJoin.<String>get("body"));
+            var lowerScriptCode = criteriaBuilder.lower(scriptJoin.<String>get("code"));
+
+            Predicate bodyMatch;
+            if ("ur".equalsIgnoreCase(scriptCode)) {
+                bodyMatch = criteriaBuilder.or(
+                        criteriaBuilder.and(
+                                criteriaBuilder.equal(lowerScriptCode, "ur"),
+                                criteriaBuilder.like(lowerBody, rawPattern)
+                        ),
+                        criteriaBuilder.like(lowerBody, rawPattern)
+                );
+            } else if ("hi".equalsIgnoreCase(scriptCode)) {
+                bodyMatch = criteriaBuilder.or(
+                        criteriaBuilder.and(
+                                criteriaBuilder.equal(lowerScriptCode, "hi"),
+                                criteriaBuilder.like(lowerBody, rawPattern)
+                        ),
+                        criteriaBuilder.like(lowerBody, rawPattern)
+                );
+            } else if ("en".equalsIgnoreCase(scriptCode)) {
+                var unaccentTextBody = criteriaBuilder.function("unaccent", String.class, lowerBody);
+                bodyMatch = criteriaBuilder.or(
+                        criteriaBuilder.and(
+                                criteriaBuilder.equal(lowerScriptCode, "en"),
+                                criteriaBuilder.or(
+                                        criteriaBuilder.like(unaccentTextBody, normPattern),
+                                        criteriaBuilder.like(lowerBody, rawPattern)
+                                )
+                        ),
+                        criteriaBuilder.like(unaccentTextBody, normPattern),
+                        criteriaBuilder.like(lowerBody, rawPattern)
+                );
+            } else {
+                var unaccentTextBody = criteriaBuilder.function("unaccent", String.class, lowerBody);
+                bodyMatch = criteriaBuilder.or(
+                        criteriaBuilder.like(lowerBody, rawPattern),
+                        criteriaBuilder.like(unaccentTextBody, normPattern)
+                );
+            }
+
+            predicates.add(bodyMatch);
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
     }
 }

@@ -83,4 +83,40 @@ public class SearchController {
         SearchResponseDto result = searchService.searchAuthorsOnly(request);
         return ResponseEntity.ok(ApiResponse.success("Authors search completed successfully", result));
     }
+
+    @GetMapping(path = { "/couplets", "/ashaar" })
+    public ResponseEntity<ApiResponse<CoupletsSearchResponseDto>> searchCouplets(
+            @RequestParam(value = "text", required = false) String text,
+            @RequestParam(value = "query", required = false) String query,
+            @RequestParam(value = "genreId", required = false) Long genreId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "size", required = false) Integer size,
+            @RequestParam(value = "limit", required = false) Integer limit,
+            @RequestParam(value = "scriptId", required = false) Long scriptId) {
+        String searchText = text != null && !text.trim().isEmpty() ? text : query;
+        int requestedLimit = (limit != null && limit > 0) ? limit : ((size != null && size > 0) ? size : 5);
+        LOGGER.debug("GET /api/search/couplets called with query: {}, genreId: {}, page: {}, size: {}, scriptId: {}",
+                searchText, genreId, page, requestedLimit, scriptId);
+        SearchRequestDto request = new SearchRequestDto(searchText);
+        request.setGenreId(genreId);
+        request.setPage(page != null ? page : 0);
+        request.setSize(requestedLimit);
+        CoupletsSearchResponseDto result = searchService.searchCouplets(request, scriptId);
+        return ResponseEntity.ok(ApiResponse.success("Couplets fetched successfully", result));
+    }
+
+    @PostMapping("/couplets")
+    public ResponseEntity<ApiResponse<CoupletsSearchResponseDto>> searchCoupletsPost(
+            @RequestBody(required = false) SearchRequestDto request,
+            @RequestParam(value = "scriptId", required = false) Long scriptId) {
+        LOGGER.debug("POST /api/search/couplets called with payload: {}, scriptId: {}", request, scriptId);
+        if (request == null) {
+            request = new SearchRequestDto("");
+        }
+        if (request.getSize() == null || request.getSize() <= 0) {
+            request.setSize(5);
+        }
+        CoupletsSearchResponseDto result = searchService.searchCouplets(request, scriptId);
+        return ResponseEntity.ok(ApiResponse.success("Couplets fetched successfully", result));
+    }
 }
